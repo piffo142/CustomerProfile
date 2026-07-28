@@ -1,0 +1,37 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Vector recreation of the Beautiful You brand mark: line-art profile with tulip. -->
+  <g fill="none" stroke="#A9BCA4" stroke-width="6" stroke-linecap="round">
+    <!-- face profile: forehead, nose, lips, chin, neck -->
+    <path d="M 250 74 C 180 84 152 138 160 186 C 162 202 152 214 147 226 C 144 232 149 237 156 238 C 161 239 163 244 162 250 C 161 256 164 260 170 261 C 175 262 177 267 175 274 C 172 282 178 288 188 289 C 199 290 208 296 210 306 C 214 320 208 336 194 350" />
+    <!-- eyebrow and closed eye -->
+    <path d="M 196 190 C 208 183 224 183 234 188" stroke-width="5" />
+    <path d="M 202 214 C 212 209 226 209 234 214" stroke-width="5" />
+    <path d="M 206 219 L 202 226 M 216 221 L 214 228 M 226 220 L 226 227" stroke-width="4" />
+    <!-- lips accent -->
+    <path d="M 166 252 C 173 255 180 255 185 252" stroke-width="4" />
+    <!-- hair: outer sweep -->
+    <path d="M 250 74 C 336 50 402 108 390 200 C 382 258 354 300 354 348 C 354 392 388 414 432 436" />
+    <!-- hair: inner strands -->
+    <path d="M 256 104 C 316 98 356 140 352 200 C 349 244 332 278 330 314" stroke-width="5" />
+    <path d="M 236 92 C 288 92 322 128 320 180" stroke-width="4" />
+    <!-- shoulder and collarbone -->
+    <path d="M 194 350 C 172 384 136 406 88 416 C 156 440 248 440 316 414" />
+    <!-- décolleté sweeps -->
+    <path d="M 64 448 C 160 492 300 492 400 444" stroke-width="5" />
+    <path d="M 108 484 C 190 512 290 510 360 482" stroke-width="4" />
+  </g>
+  <!-- tulip -->
+  <g stroke-linecap="round">
+    <path d="M 402 132 C 396 194 368 244 330 282" fill="none" stroke="#A9BCA4" stroke-width="6" />
+    <path d="M 380 196 C 346 202 324 224 318 258 C 352 252 374 230 380 196 Z"
+          fill="#DCE5DA" stroke="#A9BCA4" stroke-width="5" />
+    <path d="M 376 218 C 404 230 418 254 416 286 C 388 274 374 250 376 218 Z"
+          fill="#DCE5DA" stroke="#A9BCA4" stroke-width="5" />
+    <path d="M 402 64 C 384 88 384 116 402 134 C 420 116 420 88 402 64 Z"
+          fill="#F9D4C2" stroke="#EFA98C" stroke-width="5" />
+    <path d="M 366 82 C 354 106 366 128 400 134 C 390 110 380 92 366 82 Z"
+          fill="#F9D4C2" stroke="#EFA98C" stroke-width="5" />
+    <path d="M 438 82 C 450 106 438 128 404 134 C 414 110 424 92 438 82 Z"
+          fill="#F9D4C2" stroke="#EFA98C" stroke-width="5" />
+  </g>
+</svg>
