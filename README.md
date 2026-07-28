@@ -121,12 +121,17 @@ The entry screen carries the Beautiful You logo, recreated as vector line-art
 styled labels. To use the original artwork instead, drop a PNG export in
 `Resources/Images/` and update the `Image` source in `Views/ClientsPage.xaml`.
 
-## Open question (decide before Phase 1)
+## Decision: standalone product
 
-This overlaps SIG BeautyDesk substantially — same tenant model, same client
-entity, same MAUI stack. Decide now whether this is a standalone product or
-the client-records module of BeautyDesk: it determines whether `Client` is
-owned here or consumed from a shared package, and whether the Supabase tables
-land in BeautyDesk's existing project (additive tables in the same project
-beat cross-project sync). Merging two live client tables later is the worst
-version of this problem.
+The plan's open question (standalone vs. client-records module of SIG
+BeautyDesk) is resolved: **this is a standalone product** (decided
+2026-07-28). Consequences:
+
+- The `Client` entity and domain model are owned here, in
+  `SIG.ClientCard.Core` — no shared `SIG.Salon.Core` package.
+- The app targets its **own dedicated Supabase project**; provision it per
+  `docs/SUPABASE_SETUP.md`. No tables are shared with any BeautyDesk project.
+- If integration with BeautyDesk is ever wanted later, it should be an API
+  boundary between the two products, not a merge of live client tables —
+  the plan is explicit that reconciling two client tables across live tenant
+  data is the worst version of that problem.
