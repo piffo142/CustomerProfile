@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using SIG.ClientCard.Data;
 
@@ -10,9 +11,11 @@ using SIG.ClientCard.Data;
 namespace SIG.ClientCard.Data.Migrations
 {
     [DbContext(typeof(ClientCardContext))]
-    partial class ClientCardContextModelSnapshot : ModelSnapshot
+    [Migration("20260728143423_AddReconcileTracking")]
+    partial class AddReconcileTracking
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.10");

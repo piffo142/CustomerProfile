@@ -20,11 +20,27 @@ public sealed class SyncEngine(
 {
     private static readonly Random Jitter = new();
 
-    /// <summary>Push everything eligible, then pull to convergence.</summary>
+    /// <summary>
+    /// Push everything eligible, pull to convergence, then — at most once per
+    /// reconcile interval — assert local and server agree via checksums.
+    /// </summary>
     public async Task SyncNowAsync(CancellationToken ct = default)
     {
         await PushPendingAsync(ct);
         await PullToConvergenceAsync(ct);
+
+        if (await IsReconcileDueAsync(ct))
+        {
+            try
+            {
+                await ReconcileAsync(ct);
+            }
+            catch (SyncTransportException)
+            {
+                // Reconciliation is an integrity assertion, not a delivery
+                // mechanism — a flaky network just means it runs next time.
+            }
+        }
     }
 
     // ---------------------------------------------------------------- push
@@ -362,6 +378,111 @@ public sealed class SyncEngine(
 
     private static Task<bool> ParentExistsAsync(ClientCardContext db, Guid clientId, CancellationToken ct)
         => db.Clients.AnyAsync(c => c.Id == clientId, ct);
+
+    // ---------------------------------------------------------------- reconcile
+
+    private async Task<bool> IsReconcileDueAsync(CancellationToken ct)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var state = await db.SyncState.AsNoTracking().FirstOrDefaultAsync(ct);
+        return state?.LastReconcileAt is null
+            || state.LastReconcileAt <= clock.UtcNow - options.ReconcileInterval;
+    }
+
+    /// <summary>
+    /// Full-hash reconciliation: compares per-entity row counts and id hashes
+    /// with the server. A mismatch means the cursor lost rows despite the
+    /// overlap window — the cursor is reset and everything re-pulled, which the
+    /// idempotent appliers make safe. Returns true when local and server agree.
+    /// </summary>
+    public async Task<bool> ReconcileAsync(CancellationToken ct = default)
+    {
+        var server = await transport.GetChecksumAsync(ct);
+
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var match =
+            Matches(server.Clients, await db.Clients.Select(x => x.Id).ToListAsync(ct)) &&
+            Matches(server.Services, await db.ServiceRecords.Select(x => x.Id).ToListAsync(ct)) &&
+            Matches(server.Notes, await db.ClientNotes.Select(x => x.Id).ToListAsync(ct)) &&
+            Matches(server.Consents, await db.ClientConsents.Select(x => x.Id).ToListAsync(ct));
+
+        var state = await GetStateAsync(db, ct);
+        state.LastReconcileAt = clock.UtcNow;
+        if (!match)
+        {
+            state.Cursor = 0;
+        }
+
+        await db.SaveChangesAsync(ct);
+
+        if (!match)
+        {
+            await PullToConvergenceAsync(ct);
+        }
+
+        return match;
+    }
+
+    private static bool Matches(EntityChecksum server, List<Guid> localIds)
+        => server.Count == localIds.Count && server.IdsHash == HashIds(localIds);
+
+    /// <summary>
+    /// Mirrors the server's md5(string_agg(id::text, ',' order by id)):
+    /// canonical lowercase ids joined by commas. Ordinal sort of the canonical
+    /// text equals Postgres uuid byte ordering (fixed-position hex + dashes),
+    /// so both sides hash the same string.
+    /// </summary>
+    internal static string HashIds(List<Guid> ids)
+    {
+        if (ids.Count == 0)
+        {
+            return "";
+        }
+
+        var joined = string.Join(",", ids.Select(g => g.ToString("D")).Order(StringComparer.Ordinal));
+        var hash = System.Security.Cryptography.MD5.HashData(System.Text.Encoding.UTF8.GetBytes(joined));
+        return Convert.ToHexStringLower(hash);
+    }
+
+    // ---------------------------------------------------------------- dead letters
+
+    public async Task<IReadOnlyList<SyncDeadLetterEntry>> GetDeadLettersAsync(CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        return await db.DeadLetters.AsNoTracking().OrderByDescending(d => d.ParkedAt).ToListAsync(ct);
+    }
+
+    /// <summary>Move a parked op back into the outbox for a fresh attempt.</summary>
+    public async Task RequeueDeadLetterAsync(Guid opId, CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var dead = await db.DeadLetters.FirstOrDefaultAsync(d => d.OpId == opId, ct);
+        if (dead is null)
+        {
+            return;
+        }
+
+        db.Outbox.Add(new SyncOutboxEntry
+        {
+            OpId = dead.OpId,
+            Entity = dead.Entity,
+            EntityId = dead.EntityId,
+            Operation = dead.Operation,
+            Payload = dead.Payload,
+            CreatedAt = dead.CreatedAt,
+            Attempts = 0,
+            NextAttemptAt = null,
+        });
+        db.DeadLetters.Remove(dead);
+        await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>Drop a parked op permanently. The local row keeps its data; it simply never syncs.</summary>
+    public async Task DiscardDeadLetterAsync(Guid opId, CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        await db.DeadLetters.Where(d => d.OpId == opId).ExecuteDeleteAsync(ct);
+    }
 
     // ---------------------------------------------------------------- status
 

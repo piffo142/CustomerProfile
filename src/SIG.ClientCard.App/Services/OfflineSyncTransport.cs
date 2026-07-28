@@ -14,4 +14,7 @@ public sealed class OfflineSyncTransport : ISyncTransport
 
     public Task<SyncPullBundle> PullAsync(long cursor, int limit, CancellationToken ct = default)
         => Task.FromResult(new SyncPullBundle());
+
+    public Task<SyncChecksum> GetChecksumAsync(CancellationToken ct = default)
+        => throw new SyncTransportException("sync not configured (Phase 0, local only)");
 }

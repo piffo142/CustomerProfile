@@ -19,4 +19,11 @@ public sealed class SyncOptions
     public TimeSpan BackoffBase { get; init; } = TimeSpan.FromSeconds(2);
 
     public TimeSpan BackoffCap { get; init; } = TimeSpan.FromMinutes(5);
+
+    /// <summary>
+    /// How often the full checksum reconciliation runs after a converged pull.
+    /// It asserts the cursor never silently lost rows; a mismatch resets the
+    /// cursor and re-pulls from zero.
+    /// </summary>
+    public TimeSpan ReconcileInterval { get; init; } = TimeSpan.FromHours(24);
 }

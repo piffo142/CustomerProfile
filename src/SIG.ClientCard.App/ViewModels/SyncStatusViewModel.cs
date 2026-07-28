@@ -9,6 +9,7 @@ public partial class SyncStatusViewModel : ObservableObject
 {
     private readonly SyncEngine _engine;
     private readonly AuthService? _auth;
+    private bool _updateRequired;
 
     [ObservableProperty]
     private string _statusLine = "";
@@ -36,8 +37,16 @@ public partial class SyncStatusViewModel : ObservableObject
         _engine = engine;
         _auth = SupabaseConfig.IsConfigured ? services.GetRequiredService<AuthService>() : null;
 
-        scheduler.SyncCompleted += (_, _) => MainThread.BeginInvokeOnMainThread(async () => await RefreshAsync());
-        scheduler.SyncFaulted += (_, _) => MainThread.BeginInvokeOnMainThread(async () => await RefreshAsync());
+        scheduler.SyncCompleted += (_, _) => MainThread.BeginInvokeOnMainThread(async () =>
+        {
+            _updateRequired = false;
+            await RefreshAsync();
+        });
+        scheduler.SyncFaulted += (_, ex) => MainThread.BeginInvokeOnMainThread(async () =>
+        {
+            _updateRequired = ex is SyncUpdateRequiredException;
+            await RefreshAsync();
+        });
         if (_auth is not null)
         {
             _auth.AuthStateChanged += (_, _) => MainThread.BeginInvokeOnMainThread(async () => await RefreshAsync());
@@ -65,7 +74,9 @@ public partial class SyncStatusViewModel : ObservableObject
         AccountLine = IsSignedIn ? _auth.Email ?? "Signed in" : "Not signed in — working offline";
 
         var status = await _engine.GetStatusAsync();
-        StatusLine = status.PendingOps == 0 ? "All changes synced" : $"{status.PendingOps} change(s) waiting to sync";
+        StatusLine = _updateRequired
+            ? "App update required to sync"
+            : status.PendingOps == 0 ? "All changes synced" : $"{status.PendingOps} change(s) waiting to sync";
         DetailLine = status.LastPullAt is { } t ? $"Last sync {t.ToLocalTime():HH:mm, d MMM}" : "Not synced yet";
         HasDeadLetters = status.DeadLetteredOps > 0;
         DeadLetterLine = HasDeadLetters ? $"{status.DeadLetteredOps} change(s) need attention" : "";
@@ -87,5 +98,12 @@ public partial class SyncStatusViewModel : ObservableObject
     {
         Shell.Current.FlyoutIsPresented = false;
         await Shell.Current.GoToAsync("//login");
+    }
+
+    [RelayCommand]
+    private async Task ReviewDeadLettersAsync()
+    {
+        Shell.Current.FlyoutIsPresented = false;
+        await Shell.Current.GoToAsync("deadletters");
     }
 }

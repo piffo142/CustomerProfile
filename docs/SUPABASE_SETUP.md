@@ -22,6 +22,11 @@ the salon. Allow 20–30 minutes.
    and all row-level-security policies.
 3. Repeat with `supabase/migrations/0002_sync_rpcs.sql` (the `sync_push` /
    `sync_pull` functions and the applied-op purge helper).
+4. Repeat with `supabase/migrations/0003_sync_hardening.sql` (version
+   handshake + `sync_checksum` for the periodic integrity check). To force
+   outdated app installs to update before syncing again, raise
+   `update sync_config set min_client_version = <n>;` when you ship a
+   breaking schema change.
 
 Alternatively, with the Supabase CLI: `supabase link --project-ref <ref>`
 then `supabase db push`.

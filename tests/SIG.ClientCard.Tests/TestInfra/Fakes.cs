@@ -47,4 +47,11 @@ public sealed class FakeTransport : ISyncTransport
         PullCursors.Add(cursor);
         return Task.FromResult(PullPages.Count > 0 ? PullPages.Dequeue() : new SyncPullBundle());
     }
+
+    public SyncChecksum? Checksum { get; set; }
+
+    public Task<SyncChecksum> GetChecksumAsync(CancellationToken ct = default)
+        => Checksum is not null
+            ? Task.FromResult(Checksum)
+            : throw new SyncTransportException("checksum unavailable");
 }

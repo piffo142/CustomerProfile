@@ -111,6 +111,8 @@ public static class MauiProgram
         services.AddTransient<AddNoteViewModel>();
         services.AddTransient<AddNotePage>();
         services.AddSingleton<SyncStatusViewModel>();
+        services.AddTransient<DeadLettersViewModel>();
+        services.AddTransient<DeadLettersPage>();
         services.AddSingleton<AppShell>();
 
         var app = builder.Build();

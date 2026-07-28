@@ -29,7 +29,11 @@ public sealed class SupabaseSyncTransport(HttpClient http) : ISyncTransport
             });
         }
 
-        var body = new JsonObject { ["p_ops"] = array };
+        var body = new JsonObject
+        {
+            ["p_ops"] = array,
+            ["p_client_version"] = SyncProtocol.SchemaVersion,
+        };
         var json = await PostRpcAsync("sync_push", body.ToJsonString(), ct);
 
         var result = JsonSerializer.Deserialize<SyncPushResult>(json, SyncJson.Options);
@@ -38,11 +42,23 @@ public sealed class SupabaseSyncTransport(HttpClient http) : ISyncTransport
 
     public async Task<SyncPullBundle> PullAsync(long cursor, int limit, CancellationToken ct = default)
     {
-        var body = new JsonObject { ["p_cursor"] = cursor, ["p_limit"] = limit };
+        var body = new JsonObject
+        {
+            ["p_cursor"] = cursor,
+            ["p_limit"] = limit,
+            ["p_client_version"] = SyncProtocol.SchemaVersion,
+        };
         var json = await PostRpcAsync("sync_pull", body.ToJsonString(), ct);
 
         var bundle = JsonSerializer.Deserialize<SyncPullBundle>(json, SyncJson.Options);
         return bundle ?? new SyncPullBundle();
+    }
+
+    public async Task<SyncChecksum> GetChecksumAsync(CancellationToken ct = default)
+    {
+        var json = await PostRpcAsync("sync_checksum", "{}", ct);
+        var checksum = JsonSerializer.Deserialize<SyncChecksum>(json, SyncJson.Options);
+        return checksum ?? new SyncChecksum();
     }
 
     private async Task<string> PostRpcAsync(string function, string body, CancellationToken ct)
@@ -67,16 +83,17 @@ public sealed class SupabaseSyncTransport(HttpClient http) : ISyncTransport
 
             var detail = await response.Content.ReadAsStringAsync(ct);
 
-            // 5xx and 429 are transient → retry with backoff. Other 4xx here
-            // means the whole request was malformed or unauthorized — also
-            // surfaced as transport-level so ops are not silently parked;
-            // per-op validation rejections come back in the RPC result instead.
-            if (response.StatusCode >= HttpStatusCode.InternalServerError
-                || response.StatusCode == HttpStatusCode.TooManyRequests)
+            // Version handshake: the server refuses clients below its minimum
+            // schema version. Not retryable; the app needs updating.
+            if (detail.Contains("client_too_old", StringComparison.OrdinalIgnoreCase))
             {
-                throw new SyncTransportException($"rpc/{function} -> {(int)response.StatusCode}: {detail}");
+                throw new SyncUpdateRequiredException(
+                    "The server requires a newer app version before syncing can continue.");
             }
 
+            // Everything else — 5xx, 429, malformed/unauthorized requests — is
+            // surfaced as transport-level so ops are never silently parked;
+            // per-op validation rejections come back in the RPC result instead.
             throw new SyncTransportException($"rpc/{function} -> {(int)response.StatusCode}: {detail}");
         }
     }

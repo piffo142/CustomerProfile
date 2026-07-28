@@ -11,7 +11,7 @@ namespace SIG.ClientCard.Data.CompiledModels
     public partial class ClientCardContextModel
     {
         private ClientCardContextModel()
-            : base(skipDetectChanges: false, modelId: new Guid("04e83c46-6863-4d15-85d8-a51367832d53"), entityTypeCount: 8)
+            : base(skipDetectChanges: false, modelId: new Guid("068aa716-b1f8-4fc5-ad4c-275c08afb739"), entityTypeCount: 8)
         {
         }
 

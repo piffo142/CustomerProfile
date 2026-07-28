@@ -26,7 +26,11 @@
             <Label Text="{Binding StatusLine}" FontSize="13" TextColor="{StaticResource Ink}" />
             <Label Text="{Binding DetailLine}" FontSize="11" TextColor="{StaticResource InkMuted}" />
             <Label Text="{Binding DeadLetterLine}" FontSize="11" TextColor="{StaticResource Danger}"
-                   IsVisible="{Binding HasDeadLetters}" />
+                   IsVisible="{Binding HasDeadLetters}">
+                <Label.GestureRecognizers>
+                    <TapGestureRecognizer Command="{Binding ReviewDeadLettersCommand}" />
+                </Label.GestureRecognizers>
+            </Label>
             <Button Text="Sign out"
                     Style="{StaticResource SecondaryButton}"
                     Command="{Binding SignOutCommand}"

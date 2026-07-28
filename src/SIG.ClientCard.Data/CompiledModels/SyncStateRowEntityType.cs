@@ -19,7 +19,7 @@ namespace SIG.ClientCard.Data.CompiledModels
                 "SIG.ClientCard.Data.Entities.SyncStateRow",
                 typeof(SyncStateRow),
                 baseEntityType,
-                propertyCount: 4,
+                propertyCount: 5,
                 keyCount: 1);
 
             var id = runtimeEntityType.AddProperty(
@@ -56,6 +56,15 @@ namespace SIG.ClientCard.Data.CompiledModels
                 nullable: true,
                 valueConverter: new NullableDateTimeOffsetToUtcTicksConverter());
             lastPushAt.AddAnnotation("Relational:ColumnName", "last_push_at");
+
+            var lastReconcileAt = runtimeEntityType.AddProperty(
+                "LastReconcileAt",
+                typeof(DateTimeOffset?),
+                propertyInfo: typeof(SyncStateRow).GetProperty("LastReconcileAt", BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly),
+                fieldInfo: typeof(SyncStateRow).GetField("<LastReconcileAt>k__BackingField", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly),
+                nullable: true,
+                valueConverter: new NullableDateTimeOffsetToUtcTicksConverter());
+            lastReconcileAt.AddAnnotation("Relational:ColumnName", "last_reconcile_at");
 
             var key = runtimeEntityType.AddKey(
                 new[] { id });

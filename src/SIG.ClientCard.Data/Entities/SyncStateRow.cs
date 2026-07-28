@@ -13,4 +13,5 @@ public class SyncStateRow
     public long Cursor { get; set; }
     public DateTimeOffset? LastPullAt { get; set; }
     public DateTimeOffset? LastPushAt { get; set; }
+    public DateTimeOffset? LastReconcileAt { get; set; }
 }
