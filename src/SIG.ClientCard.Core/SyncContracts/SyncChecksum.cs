@@ -9,6 +9,7 @@ namespace SIG.ClientCard.Core.SyncContracts;
 public sealed class SyncChecksum
 {
     public EntityChecksum Clients { get; set; } = new();
+    public EntityChecksum Catalog { get; set; } = new();
     public EntityChecksum Services { get; set; } = new();
     public EntityChecksum Notes { get; set; } = new();
     public EntityChecksum Consents { get; set; } = new();

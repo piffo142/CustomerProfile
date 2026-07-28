@@ -14,10 +14,22 @@
         <DatePicker Date="{Binding PerformedOn}" BackgroundColor="{StaticResource White}" />
 
         <Label Text="Service" FontAttributes="Bold" />
+        <Picker Title="Pick from the menu (optional)"
+                ItemsSource="{Binding CatalogItems}"
+                ItemDisplayBinding="{Binding Name}"
+                SelectedItem="{Binding SelectedCatalogItem}"
+                BackgroundColor="{StaticResource White}" />
         <Entry Placeholder="e.g. Full body massage" Text="{Binding ServiceDescription}" />
 
         <Label Text="Price" FontAttributes="Bold" />
         <Entry Placeholder="0.00" Text="{Binding PriceText}" Keyboard="Numeric" />
+
+        <Button Text="Add photo"
+                Style="{StaticResource SecondaryButton}"
+                Command="{Binding AddPhotoCommand}" />
+        <Label Text="✓ Photo attached"
+               TextColor="{StaticResource SageDark}"
+               IsVisible="{Binding HasPhoto}" />
 
         <Label Text="{Binding ValidationError}"
                TextColor="{StaticResource Danger}"

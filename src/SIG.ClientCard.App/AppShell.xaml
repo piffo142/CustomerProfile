@@ -13,6 +13,10 @@
         <ShellContent ContentTemplate="{DataTemplate views:ClientsPage}" Route="clients" />
     </FlyoutItem>
 
+    <FlyoutItem Title="Reports" Icon="tab_reports.png">
+        <ShellContent ContentTemplate="{DataTemplate views:ReportsPage}" Route="reports" />
+    </FlyoutItem>
+
     <ShellContent Route="login"
                   ContentTemplate="{DataTemplate views:LoginPage}"
                   FlyoutItemIsVisible="False" />

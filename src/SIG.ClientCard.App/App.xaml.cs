@@ -1,5 +1,6 @@
 using SIG.ClientCard.App.Services;
 using SIG.ClientCard.Sync;
+using SIG.ClientCard.Sync.Attachments;
 
 namespace SIG.ClientCard.App;
 
@@ -27,6 +28,13 @@ public partial class App : Application
                     _ = _scheduler.SyncNowAsync();
                 }
             };
+
+            // Photos/signatures drain to Supabase Storage after each row sync.
+            var uploader = services.GetRequiredService<AttachmentUploader>();
+            _scheduler.SyncCompleted += (_, _) => _ = uploader.UploadPendingAsync();
+
+            // Realtime signal: instant pull triggers while signed in.
+            _ = services.GetRequiredService<RealtimeCoordinator>();
         }
     }
 

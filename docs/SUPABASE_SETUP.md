@@ -27,6 +27,9 @@ the salon. Allow 20–30 minutes.
    outdated app installs to update before syncing again, raise
    `update sync_config set min_client_version = <n>;` when you ship a
    breaking schema change.
+5. Repeat with `supabase/migrations/0004_phase3.sql` (service catalogue,
+   the private `attachments` storage bucket with salon-scoped policies,
+   Realtime publication, and the retention purge function).
 
 Alternatively, with the Supabase CLI: `supabase link --project-ref <ref>`
 then `supabase db push`.
@@ -113,7 +116,16 @@ Schedule the idempotency-ledger purge. In the SQL Editor:
 create extension if not exists pg_cron;
 select cron.schedule('purge-sync-applied-ops', '0 3 * * *',
                      $$select purge_sync_applied_ops()$$);
+-- Retention policy: erases clients with no activity within the salon's
+-- retention_years, leaving redaction_log rows so devices purge too.
+select cron.schedule('purge-expired-clients', '30 3 * * *',
+                     $$select purge_expired_clients()$$);
 ```
+
+Realtime needs no extra configuration — migration 0004 adds the synced tables
+to the `supabase_realtime` publication, and the app subscribes with the
+user's JWT (RLS applies). If Realtime is disabled on your plan, the app
+silently falls back to its 15-minute poll.
 
 (If `pg_cron` is unavailable on your plan, run `select purge_sync_applied_ops();`
 manually every few weeks — the table only grows with pushed ops.)

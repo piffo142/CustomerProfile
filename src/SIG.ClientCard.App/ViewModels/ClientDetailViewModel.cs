@@ -81,6 +81,9 @@ public partial class ClientDetailViewModel(
     private Task AddNoteAsync() => Shell.Current.GoToAsync($"addnote?clientId={ClientId}");
 
     [RelayCommand]
+    private Task OpenConsentsAsync() => Shell.Current.GoToAsync($"consents?clientId={ClientId}");
+
+    [RelayCommand]
     private async Task DeleteAsync()
     {
         if (Client is null)

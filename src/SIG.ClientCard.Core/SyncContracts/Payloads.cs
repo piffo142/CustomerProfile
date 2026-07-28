@@ -222,6 +222,45 @@ public sealed class ClientConsentPayload
     };
 }
 
+public sealed class ServiceCatalogPayload
+{
+    public Guid Id { get; set; }
+    public Guid SalonId { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public decimal DefaultPrice { get; set; }
+    public string CurrencyCode { get; set; } = "GBP";
+    public DateTimeOffset UpdatedAt { get; set; }
+    public Guid UpdatedByDevice { get; set; }
+    public DateTimeOffset? DeletedAt { get; set; }
+    public long SyncSeq { get; set; }
+
+    public static ServiceCatalogPayload From(ServiceCatalogItem i) => new()
+    {
+        Id = i.Id,
+        SalonId = i.SalonId,
+        Name = i.Name,
+        DefaultPrice = i.DefaultPrice,
+        CurrencyCode = i.CurrencyCode,
+        UpdatedAt = i.UpdatedAt,
+        UpdatedByDevice = i.UpdatedByDevice,
+        DeletedAt = i.DeletedAt,
+        SyncSeq = i.SyncSeq,
+    };
+
+    public ServiceCatalogItem ToEntity() => new()
+    {
+        Id = Id,
+        SalonId = SalonId,
+        Name = Name,
+        DefaultPrice = DefaultPrice,
+        CurrencyCode = CurrencyCode,
+        UpdatedAt = UpdatedAt,
+        UpdatedByDevice = UpdatedByDevice,
+        DeletedAt = DeletedAt,
+        SyncSeq = SyncSeq,
+    };
+}
+
 /// <summary>Result of a push: the server's current cursor and any rejected ops.</summary>
 public sealed class SyncPushResult
 {
@@ -235,6 +274,7 @@ public sealed class SyncPushResult
 public sealed class SyncPullBundle
 {
     public List<ClientPayload> Clients { get; set; } = [];
+    public List<ServiceCatalogPayload> Catalog { get; set; } = [];
     public List<ServiceRecordPayload> Services { get; set; } = [];
     public List<ClientNotePayload> Notes { get; set; } = [];
     public List<ClientConsentPayload> Consents { get; set; } = [];

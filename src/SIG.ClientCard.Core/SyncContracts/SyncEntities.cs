@@ -9,16 +9,20 @@ namespace SIG.ClientCard.Core.SyncContracts;
 public static class SyncEntities
 {
     public const string Client = "client";
+    public const string ServiceCatalog = "service_catalog";
     public const string ServiceRecord = "service_record";
     public const string ClientNote = "client_note";
     public const string ClientConsent = "client_consent";
 
+    // Catalogue before service_record: service_record.service_catalog_id must
+    // resolve when the batch lands.
     public static int PushOrdinal(string entity) => entity switch
     {
         Client => 0,
-        ServiceRecord => 1,
-        ClientNote => 2,
-        ClientConsent => 3,
+        ServiceCatalog => 1,
+        ServiceRecord => 2,
+        ClientNote => 3,
+        ClientConsent => 4,
         _ => int.MaxValue,
     };
 }

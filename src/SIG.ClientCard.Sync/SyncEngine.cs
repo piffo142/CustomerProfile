@@ -59,10 +59,11 @@ public sealed class SyncEngine(
             var batch = await db.Outbox
                 .Where(o => o.NextAttemptAt == null || o.NextAttemptAt <= now)
                 .OrderBy(o => o.Entity == SyncEntities.Client ? 0
-                    : o.Entity == SyncEntities.ServiceRecord ? 1
-                    : o.Entity == SyncEntities.ClientNote ? 2
-                    : o.Entity == SyncEntities.ClientConsent ? 3
-                    : 4)
+                    : o.Entity == SyncEntities.ServiceCatalog ? 1
+                    : o.Entity == SyncEntities.ServiceRecord ? 2
+                    : o.Entity == SyncEntities.ClientNote ? 3
+                    : o.Entity == SyncEntities.ClientConsent ? 4
+                    : 5)
                 .ThenBy(o => o.CreatedAt)
                 .Take(options.PushBatchSize)
                 .ToListAsync(ct);
@@ -183,6 +184,11 @@ public sealed class SyncEngine(
             await ApplyClientAsync(db, payload, ct);
         }
 
+        foreach (var payload in bundle.Catalog)
+        {
+            await ApplyCatalogAsync(db, payload, ct);
+        }
+
         foreach (var payload in bundle.Services)
         {
             await ApplyServiceAsync(db, payload, ct);
@@ -224,6 +230,7 @@ public sealed class SyncEngine(
         var arrays = new (int Count, long MaxSeq)[]
         {
             (bundle.Clients.Count, bundle.Clients.Count == 0 ? 0 : bundle.Clients.Max(x => x.SyncSeq)),
+            (bundle.Catalog.Count, bundle.Catalog.Count == 0 ? 0 : bundle.Catalog.Max(x => x.SyncSeq)),
             (bundle.Services.Count, bundle.Services.Count == 0 ? 0 : bundle.Services.Max(x => x.SyncSeq)),
             (bundle.Notes.Count, bundle.Notes.Count == 0 ? 0 : bundle.Notes.Max(x => x.SyncSeq)),
             (bundle.Consents.Count, bundle.Consents.Count == 0 ? 0 : bundle.Consents.Max(x => x.SyncSeq)),
@@ -275,6 +282,21 @@ public sealed class SyncEngine(
         }
 
         db.Entry(local).CurrentValues.SetValues(payload.ToEntity());
+    }
+
+    private async Task ApplyCatalogAsync(ClientCardContext db, ServiceCatalogPayload payload, CancellationToken ct)
+    {
+        var local = await db.ServiceCatalogItems.FirstOrDefaultAsync(i => i.Id == payload.Id, ct);
+        if (local is null)
+        {
+            db.ServiceCatalogItems.Add(payload.ToEntity());
+            return;
+        }
+
+        if (IncomingWins(payload.UpdatedAt, payload.UpdatedByDevice, local.UpdatedAt, local.UpdatedByDevice))
+        {
+            db.Entry(local).CurrentValues.SetValues(payload.ToEntity());
+        }
     }
 
     private async Task ApplyServiceAsync(ClientCardContext db, ServiceRecordPayload payload, CancellationToken ct)
@@ -402,6 +424,7 @@ public sealed class SyncEngine(
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var match =
             Matches(server.Clients, await db.Clients.Select(x => x.Id).ToListAsync(ct)) &&
+            Matches(server.Catalog, await db.ServiceCatalogItems.Select(x => x.Id).ToListAsync(ct)) &&
             Matches(server.Services, await db.ServiceRecords.Select(x => x.Id).ToListAsync(ct)) &&
             Matches(server.Notes, await db.ClientNotes.Select(x => x.Id).ToListAsync(ct)) &&
             Matches(server.Consents, await db.ClientConsents.Select(x => x.Id).ToListAsync(ct));

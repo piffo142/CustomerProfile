@@ -10,6 +10,7 @@ using SIG.ClientCard.Data.CompiledModels;
 using SIG.ClientCard.Data.Infrastructure;
 using SIG.ClientCard.Data.Repositories;
 using SIG.ClientCard.Sync;
+using SIG.ClientCard.Sync.Attachments;
 using SIG.ClientCard.Sync.Transport;
 
 namespace SIG.ClientCard.App;
@@ -53,6 +54,10 @@ public static class MauiProgram
         services.AddSingleton<IClientNoteRepository, ClientNoteRepository>();
         services.AddSingleton<IServiceRecordRepository, ServiceRecordRepository>();
         services.AddSingleton<IClientConsentRepository, ClientConsentRepository>();
+        services.AddSingleton<IServiceCatalogRepository, ServiceCatalogRepository>();
+        services.AddSingleton<ReportService>();
+        services.AddSingleton<AttachmentService>();
+        services.AddSingleton<IAttachmentStore>(sp => sp.GetRequiredService<AttachmentService>());
 
         // ------------------------------------------------------------ auth + sync
         services.AddSingleton(new SyncOptions());
@@ -73,6 +78,19 @@ public static class MauiProgram
                 var http = new HttpClient(handler) { BaseAddress = new Uri(SupabaseConfig.Url) };
                 return new SupabaseSyncTransport(http);
             });
+
+            services.AddSingleton(sp =>
+            {
+                var handler = new SupabaseAuthHandler(
+                    sp.GetRequiredService<IAccessTokenProvider>(), SupabaseConfig.AnonKey)
+                {
+                    InnerHandler = new HttpClientHandler(),
+                };
+                var http = new HttpClient(handler) { BaseAddress = new Uri(SupabaseConfig.Url) };
+                return new SupabaseStorageClient(http);
+            });
+            services.AddSingleton<AttachmentUploader>();
+            services.AddSingleton<RealtimeCoordinator>();
 
             services.AddTransient<LoginViewModel>();
             services.AddTransient<Views.LoginPage>();
@@ -113,6 +131,10 @@ public static class MauiProgram
         services.AddSingleton<SyncStatusViewModel>();
         services.AddTransient<DeadLettersViewModel>();
         services.AddTransient<DeadLettersPage>();
+        services.AddTransient<ConsentsViewModel>();
+        services.AddTransient<ConsentsPage>();
+        services.AddSingleton<ReportsViewModel>();
+        services.AddSingleton<ReportsPage>();
         services.AddSingleton<AppShell>();
 
         var app = builder.Build();

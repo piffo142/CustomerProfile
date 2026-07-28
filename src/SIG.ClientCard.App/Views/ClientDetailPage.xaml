@@ -28,8 +28,18 @@
                            FontSize="13"
                            TextColor="{StaticResource Danger}"
                            IsVisible="{Binding Client.MedicalFlag}" />
+                    <Image Source="{Binding Client.CardPhotoPath, Converter={StaticResource AttachmentImage}}"
+                           Aspect="AspectFit"
+                           MaximumHeightRequest="220"
+                           IsVisible="{Binding Client.CardPhotoPath, Converter={StaticResource IsNotEmpty}}"
+                           Margin="0,6,0,0"
+                           SemanticProperties.Description="Photo of the original paper card" />
                 </VerticalStackLayout>
             </Border>
+
+            <Button Text="Consents (GDPR)"
+                    Style="{StaticResource SecondaryButton}"
+                    Command="{Binding OpenConsentsCommand}" />
 
             <Grid ColumnDefinitions="*,Auto">
                 <Label Text="Service history" FontSize="18" FontAttributes="Bold" VerticalTextAlignment="Center" />

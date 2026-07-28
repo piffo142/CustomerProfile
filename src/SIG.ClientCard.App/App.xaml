@@ -11,6 +11,8 @@
             </ResourceDictionary.MergedDictionaries>
             <converters:IsNotEmptyConverter x:Key="IsNotEmpty" />
             <converters:InvertBoolConverter x:Key="Invert" />
+            <converters:AttachmentImageConverter x:Key="AttachmentImage" />
+            <converters:IsNotNullConverter x:Key="IsNotNull" />
         </ResourceDictionary>
     </Application.Resources>
 </Application>

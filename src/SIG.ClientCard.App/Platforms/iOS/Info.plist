@@ -28,5 +28,9 @@
 	</array>
 	<key>XSAppIconAssets</key>
 	<string>Assets.xcassets/appicon.appiconset</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Photograph paper client cards and treatment results.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Attach existing photos to client records.</string>
 </dict>
 </plist>

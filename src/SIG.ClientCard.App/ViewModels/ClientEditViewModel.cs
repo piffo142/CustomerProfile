@@ -11,6 +11,7 @@ namespace SIG.ClientCard.App.ViewModels;
 [QueryProperty(nameof(ClientId), "clientId")]
 public partial class ClientEditViewModel(
     IClientRepository clients,
+    AttachmentService attachments,
     SyncScheduler scheduler) : ObservableObject
 {
     private Client _client = new();
@@ -74,6 +75,24 @@ public partial class ClientEditViewModel(
     [ObservableProperty]
     private string _validationError = "";
 
+    [ObservableProperty]
+    private bool _hasCardPhoto;
+
+    /// <summary>
+    /// Card migration path: photograph the existing paper card so a salon can
+    /// go live without back-keying years of history.
+    /// </summary>
+    [RelayCommand]
+    private async Task PhotographCardAsync()
+    {
+        var path = await attachments.CapturePhotoAsync();
+        if (path is not null)
+        {
+            _client.CardPhotoPath = path;
+            HasCardPhoto = true;
+        }
+    }
+
     partial void OnAcquisitionIndexChanged(int value)
         => AcquisitionDetailVisible = (AcquisitionSource)value
             is AcquisitionSource.Referral or AcquisitionSource.Other;
@@ -116,6 +135,7 @@ public partial class ClientEditViewModel(
         }
 
         PatchTestIndex = (int)existing.PatchTestResult;
+        HasCardPhoto = existing.CardPhotoPath is not null;
     }
 
     [RelayCommand]

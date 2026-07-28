@@ -12,6 +12,8 @@ public class ClientCardContext(DbContextOptions<ClientCardContext> options) : Db
     public DbSet<ServiceRecord> ServiceRecords => Set<ServiceRecord>();
     public DbSet<ClientConsent> ClientConsents => Set<ClientConsent>();
     public DbSet<Salon> Salons => Set<Salon>();
+    public DbSet<ServiceCatalogItem> ServiceCatalogItems => Set<ServiceCatalogItem>();
+    public DbSet<AttachmentQueueEntry> AttachmentQueue => Set<AttachmentQueueEntry>();
     public DbSet<SyncOutboxEntry> Outbox => Set<SyncOutboxEntry>();
     public DbSet<SyncDeadLetterEntry> DeadLetters => Set<SyncDeadLetterEntry>();
     public DbSet<SyncStateRow> SyncState => Set<SyncStateRow>();
@@ -80,6 +82,25 @@ public class ClientCardContext(DbContextOptions<ClientCardContext> options) : Db
         {
             e.ToTable("salon");
             e.HasKey(x => x.Id);
+        });
+
+        modelBuilder.Entity<ServiceCatalogItem>(e =>
+        {
+            e.ToTable("service_catalog");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Name).IsRequired();
+            e.Property(x => x.DefaultPrice).HasPrecision(10, 2);
+            e.Property(x => x.CurrencyCode).HasMaxLength(3);
+            e.HasIndex(x => x.Name);
+            e.HasIndex(x => new { x.SalonId, x.SyncSeq });
+        });
+
+        modelBuilder.Entity<AttachmentQueueEntry>(e =>
+        {
+            e.ToTable("attachment_queue");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.RelativePath).IsRequired();
+            e.HasIndex(x => x.UploadedAt);
         });
 
         modelBuilder.Entity<SyncOutboxEntry>(e =>

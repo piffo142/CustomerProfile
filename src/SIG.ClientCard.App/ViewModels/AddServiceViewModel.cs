@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -11,6 +12,8 @@ namespace SIG.ClientCard.App.ViewModels;
 [QueryProperty(nameof(ClientId), "clientId")]
 public partial class AddServiceViewModel(
     IServiceRecordRepository services,
+    IServiceCatalogRepository catalog,
+    AttachmentService attachments,
     SyncScheduler scheduler) : ObservableObject
 {
     [ObservableProperty]
@@ -27,6 +30,43 @@ public partial class AddServiceViewModel(
 
     [ObservableProperty]
     private string _validationError = "";
+
+    [ObservableProperty]
+    private bool _hasPhoto;
+
+    [ObservableProperty]
+    private ServiceCatalogItem? _selectedCatalogItem;
+
+    /// <summary>Learned automatically from past entries; free text remains the fallback.</summary>
+    public ObservableCollection<ServiceCatalogItem> CatalogItems { get; } = [];
+
+    private string? _photoPath;
+
+    partial void OnSelectedCatalogItemChanged(ServiceCatalogItem? value)
+    {
+        if (value is not null)
+        {
+            ServiceDescription = value.Name;
+            PriceText = value.DefaultPrice.ToString("0.00", CultureInfo.CurrentCulture);
+        }
+    }
+
+    [RelayCommand]
+    public async Task LoadCatalogAsync()
+    {
+        CatalogItems.Clear();
+        foreach (var item in await catalog.GetAllAsync())
+        {
+            CatalogItems.Add(item);
+        }
+    }
+
+    [RelayCommand]
+    private async Task AddPhotoAsync()
+    {
+        _photoPath = await attachments.CapturePhotoAsync();
+        HasPhoto = _photoPath is not null;
+    }
 
     [RelayCommand]
     private async Task SaveAsync()
@@ -49,12 +89,20 @@ public partial class AddServiceViewModel(
             return;
         }
 
+        price = decimal.Round(price, 2);
+        var description = ServiceDescription.Trim();
+
+        // Learn the entry into the catalogue so the picker improves with use.
+        var catalogItem = await catalog.LearnAsync(description, price);
+
         await services.UpsertAsync(new ServiceRecord
         {
             ClientId = clientId,
             PerformedOn = DateOnly.FromDateTime(PerformedOn),
-            ServiceDescription = ServiceDescription.Trim(),
-            Price = decimal.Round(price, 2),
+            ServiceDescription = description,
+            Price = price,
+            ServiceCatalogId = catalogItem.Id,
+            PhotoPath = _photoPath,
         });
 
         if (SupabaseConfig.IsConfigured)

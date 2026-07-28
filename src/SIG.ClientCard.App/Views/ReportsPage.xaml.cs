@@ -2,11 +2,11 @@ using SIG.ClientCard.App.ViewModels;
 
 namespace SIG.ClientCard.App.Views;
 
-public partial class AddServicePage : ContentPage
+public partial class ReportsPage : ContentPage
 {
-    private readonly AddServiceViewModel _viewModel;
+    private readonly ReportsViewModel _viewModel;
 
-    public AddServicePage(AddServiceViewModel viewModel)
+    public ReportsPage(ReportsViewModel viewModel)
     {
         InitializeComponent();
         BindingContext = _viewModel = viewModel;
@@ -15,6 +15,6 @@ public partial class AddServicePage : ContentPage
     protected override async void OnAppearing()
     {
         base.OnAppearing();
-        await _viewModel.LoadCatalogAsync();
+        await _viewModel.LoadAsync();
     }
 }

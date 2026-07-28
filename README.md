@@ -6,10 +6,14 @@ as a .NET MAUI app for **Android, iOS, macOS (Mac Catalyst) and Windows**,
 backed by encrypted local SQLite with a Supabase sync path designed in from
 day one.
 
-Built to the plan in `docs/` (domain model → sync design → phasing). Currently
-at **Phase 0 (local-only)** with the full sync engine implemented and tested
-against a fake transport, ready for a Supabase project to be plugged in at
-Phase 2.
+Built to the plan in `docs/` (domain model → sync design → phasing). Phases
+0–3 are implemented: local-first CRUD, GoTrue auth + tenancy with RLS, the
+full sync engine (outbox/cursor/conflict rules, version handshake, checksum
+reconciliation, dead-letter UI), and the hardening set — Realtime-triggered
+pulls, photo/signature attachments with a Storage upload queue, consent
+capture, an auto-learned service catalogue, local reporting, and the
+server-side retention purge. What remains is operational: standing up the
+Supabase project (`docs/SUPABASE_SETUP.md`) and multi-device validation.
 
 ## Solution layout
 

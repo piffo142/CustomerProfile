@@ -52,6 +52,14 @@
                         BackgroundColor="{StaticResource White}" />
             </VerticalStackLayout>
 
+            <Label Text="Paper card" FontAttributes="Bold" Margin="0,8,0,0" />
+            <Button Text="Photograph paper card"
+                    Style="{StaticResource SecondaryButton}"
+                    Command="{Binding PhotographCardCommand}" />
+            <Label Text="✓ Card photo attached"
+                   TextColor="{StaticResource SageDark}"
+                   IsVisible="{Binding HasCardPhoto}" />
+
             <Label Text="{Binding ValidationError}"
                    TextColor="{StaticResource Danger}"
                    IsVisible="{Binding ValidationError, Converter={StaticResource IsNotEmpty}}" />

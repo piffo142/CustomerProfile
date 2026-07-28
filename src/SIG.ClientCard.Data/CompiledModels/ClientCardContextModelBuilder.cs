@@ -11,7 +11,7 @@ namespace SIG.ClientCard.Data.CompiledModels
     public partial class ClientCardContextModel
     {
         private ClientCardContextModel()
-            : base(skipDetectChanges: false, modelId: new Guid("068aa716-b1f8-4fc5-ad4c-275c08afb739"), entityTypeCount: 8)
+            : base(skipDetectChanges: false, modelId: new Guid("22f8499d-4a54-44dc-95e1-4afe606b2855"), entityTypeCount: 10)
         {
         }
 
@@ -21,7 +21,9 @@ namespace SIG.ClientCard.Data.CompiledModels
             var clientConsent = ClientConsentEntityType.Create(this);
             var clientNote = ClientNoteEntityType.Create(this);
             var salon = SalonEntityType.Create(this);
+            var serviceCatalogItem = ServiceCatalogItemEntityType.Create(this);
             var serviceRecord = ServiceRecordEntityType.Create(this);
+            var attachmentQueueEntry = AttachmentQueueEntryEntityType.Create(this);
             var syncDeadLetterEntry = SyncDeadLetterEntryEntityType.Create(this);
             var syncOutboxEntry = SyncOutboxEntryEntityType.Create(this);
             var syncStateRow = SyncStateRowEntityType.Create(this);
@@ -34,7 +36,9 @@ namespace SIG.ClientCard.Data.CompiledModels
             ClientConsentEntityType.CreateAnnotations(clientConsent);
             ClientNoteEntityType.CreateAnnotations(clientNote);
             SalonEntityType.CreateAnnotations(salon);
+            ServiceCatalogItemEntityType.CreateAnnotations(serviceCatalogItem);
             ServiceRecordEntityType.CreateAnnotations(serviceRecord);
+            AttachmentQueueEntryEntityType.CreateAnnotations(attachmentQueueEntry);
             SyncDeadLetterEntryEntityType.CreateAnnotations(syncDeadLetterEntry);
             SyncOutboxEntryEntityType.CreateAnnotations(syncOutboxEntry);
             SyncStateRowEntityType.CreateAnnotations(syncStateRow);
