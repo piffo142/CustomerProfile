@@ -10,6 +10,7 @@
                 <ResourceDictionary Source="Resources/Styles/Styles.xaml" />
             </ResourceDictionary.MergedDictionaries>
             <converters:IsNotEmptyConverter x:Key="IsNotEmpty" />
+            <converters:InvertBoolConverter x:Key="Invert" />
         </ResourceDictionary>
     </Application.Resources>
 </Application>

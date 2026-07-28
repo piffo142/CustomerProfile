@@ -11,6 +11,14 @@ public sealed class SupabaseAuthHandler(IAccessTokenProvider tokens, string anon
     protected override async Task<HttpResponseMessage> SendAsync(
         HttpRequestMessage request, CancellationToken cancellationToken)
     {
+        // An HttpRequestMessage cannot be sent twice, so buffer the content up
+        // front and retry with a clone after a refresh.
+        byte[]? body = null;
+        if (request.Content is not null)
+        {
+            body = await request.Content.ReadAsByteArrayAsync(cancellationToken);
+        }
+
         var token = await tokens.GetAccessTokenAsync(cancellationToken);
         Decorate(request, token);
 
@@ -22,8 +30,35 @@ public sealed class SupabaseAuthHandler(IAccessTokenProvider tokens, string anon
 
         response.Dispose();
         var refreshed = await tokens.RefreshAsync(cancellationToken);
-        Decorate(request, refreshed);
-        return await base.SendAsync(request, cancellationToken);
+        using var retry = Clone(request, body);
+        Decorate(retry, refreshed);
+        return await base.SendAsync(retry, cancellationToken);
+    }
+
+    private static HttpRequestMessage Clone(HttpRequestMessage request, byte[]? body)
+    {
+        var clone = new HttpRequestMessage(request.Method, request.RequestUri)
+        {
+            Version = request.Version,
+        };
+
+        foreach (var header in request.Headers)
+        {
+            clone.Headers.TryAddWithoutValidation(header.Key, header.Value);
+        }
+
+        if (body is not null && request.Content is not null)
+        {
+            var content = new ByteArrayContent(body);
+            foreach (var header in request.Content.Headers)
+            {
+                content.Headers.TryAddWithoutValidation(header.Key, header.Value);
+            }
+
+            clone.Content = content;
+        }
+
+        return clone;
     }
 
     private void Decorate(HttpRequestMessage request, string token)

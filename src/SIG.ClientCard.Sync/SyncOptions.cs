@@ -16,9 +16,6 @@ public sealed class SyncOptions
     /// </summary>
     public long OverlapWindow { get; init; } = 1000;
 
-    /// <summary>Transport failures beyond this park the op in the dead letter.</summary>
-    public int MaxAttempts { get; init; } = 10;
-
     public TimeSpan BackoffBase { get; init; } = TimeSpan.FromSeconds(2);
 
     public TimeSpan BackoffCap { get; init; } = TimeSpan.FromMinutes(5);

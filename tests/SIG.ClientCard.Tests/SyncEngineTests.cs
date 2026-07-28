@@ -16,7 +16,7 @@ public class SyncEngineTests : IDisposable
     private readonly FakeDevice _device = new();
     private readonly FakeTenant _tenant = new();
     private readonly FakeTransport _transport = new();
-    private readonly SyncOptions _options = new() { PullLimit = 3, MaxAttempts = 3 };
+    private readonly SyncOptions _options = new() { PullLimit = 3 };
 
     private SyncEngine Engine => new(_db, _transport, _clock, _options);
     private ClientRepository Clients => new(_db, new OutboxWriter(_clock), _clock, _device, _tenant);
@@ -72,11 +72,13 @@ public class SyncEngineTests : IDisposable
     }
 
     [Fact]
-    public async Task Exhausted_retries_park_the_op_in_dead_letter()
+    public async Task Transport_failures_retry_forever_with_capped_backoff_and_never_park()
     {
+        // A device offline for a long stretch must not lose queued changes to
+        // the dead letter — only server validation rejections park.
         await Clients.UpsertAsync(new Client { LastName = "Smith", FirstName = "Anna" });
 
-        for (var i = 0; i < _options.MaxAttempts; i++)
+        for (var i = 0; i < 15; i++)
         {
             _transport.PushFailures.Enqueue(new SyncTransportException("offline"));
             await Engine.PushPendingAsync();
@@ -84,9 +86,17 @@ public class SyncEngineTests : IDisposable
         }
 
         await using var db = _db.CreateDbContext();
-        Assert.Empty(await db.Outbox.ToListAsync());
-        var dead = Assert.Single(await db.DeadLetters.ToListAsync());
-        Assert.Equal(_options.MaxAttempts, dead.Attempts);
+        var entry = Assert.Single(await db.Outbox.ToListAsync());
+        Assert.Empty(await db.DeadLetters.ToListAsync());
+        Assert.Equal(15, entry.Attempts);
+
+        // Backoff stays within cap (+1s jitter allowance).
+        Assert.NotNull(entry.NextAttemptAt);
+        Assert.True(entry.NextAttemptAt <= _clock.UtcNow + _options.BackoffCap + TimeSpan.FromSeconds(1));
+
+        // Connectivity returns: the op still goes through.
+        await Engine.PushPendingAsync();
+        Assert.Single(_transport.PushedBatches);
     }
 
     [Fact]

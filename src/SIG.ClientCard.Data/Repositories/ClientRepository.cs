@@ -83,16 +83,10 @@ public sealed class ClientRepository(
         client.UpdatedByDevice = device.DeviceId;
 
         var exists = await db.Clients.AnyAsync(c => c.Id == client.Id, ct);
-        if (exists)
-        {
-            db.Clients.Update(client);
-        }
-        else
-        {
-            db.Clients.Add(client);
-        }
 
-        // Children are managed by their own repositories; only the header syncs here.
+        // Setting Entry.State attaches the root entity alone — unlike
+        // Add/Update, it does not walk the navigation graph, so children stay
+        // managed by their own repositories.
         db.Entry(client).State = exists ? EntityState.Modified : EntityState.Added;
 
         outbox.EnqueueUpsert(db, SyncEntities.Client, client.Id, ClientPayload.From(client));

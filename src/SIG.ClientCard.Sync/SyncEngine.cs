@@ -36,22 +36,25 @@ public sealed class SyncEngine(
             await using var db = await dbFactory.CreateDbContextAsync(ct);
             var now = clock.UtcNow;
 
-            var eligible = await db.Outbox
+            // Static push order: client before service_record before client_note,
+            // or FK constraints reject the batch. The ternary chain translates
+            // to a SQL CASE so only one batch is ever materialised, however
+            // large the backlog after a long offline stretch.
+            var batch = await db.Outbox
                 .Where(o => o.NextAttemptAt == null || o.NextAttemptAt <= now)
+                .OrderBy(o => o.Entity == SyncEntities.Client ? 0
+                    : o.Entity == SyncEntities.ServiceRecord ? 1
+                    : o.Entity == SyncEntities.ClientNote ? 2
+                    : o.Entity == SyncEntities.ClientConsent ? 3
+                    : 4)
+                .ThenBy(o => o.CreatedAt)
+                .Take(options.PushBatchSize)
                 .ToListAsync(ct);
 
-            if (eligible.Count == 0)
+            if (batch.Count == 0)
             {
                 return;
             }
-
-            // Static push order: client before service_record before client_note,
-            // or FK constraints reject the batch.
-            var batch = eligible
-                .OrderBy(o => SyncEntities.PushOrdinal(o.Entity))
-                .ThenBy(o => o.CreatedAt)
-                .Take(options.PushBatchSize)
-                .ToList();
 
             var ops = batch
                 .Select(o => new SyncOp(o.OpId, o.Entity, o.EntityId, o.Operation, o.Payload, o.CreatedAt))
@@ -95,13 +98,19 @@ public sealed class SyncEngine(
             state.LastPushAt = clock.UtcNow;
             await db.SaveChangesAsync(ct);
 
-            if (eligible.Count <= batch.Count)
+            if (batch.Count < options.PushBatchSize)
             {
                 return;
             }
         }
     }
 
+    /// <summary>
+    /// Transport failure: the op never reached the server, so it must NOT be
+    /// parked — a device offline for a week would otherwise dead-letter every
+    /// queued change. Retry forever with capped exponential backoff; only
+    /// validation rejections (the server saw it and said no) park.
+    /// </summary>
     private async Task RecordFailureAsync(
         ClientCardContext db, List<SyncOutboxEntry> batch, string error, CancellationToken ct)
     {
@@ -110,26 +119,7 @@ public sealed class SyncEngine(
             entry.Attempts++;
             entry.LastError = error;
 
-            if (entry.Attempts >= options.MaxAttempts)
-            {
-                db.DeadLetters.Add(new SyncDeadLetterEntry
-                {
-                    OpId = entry.OpId,
-                    Entity = entry.Entity,
-                    EntityId = entry.EntityId,
-                    Operation = entry.Operation,
-                    Payload = entry.Payload,
-                    CreatedAt = entry.CreatedAt,
-                    Attempts = entry.Attempts,
-                    LastError = error,
-                    ParkedAt = clock.UtcNow,
-                });
-                db.Outbox.Remove(entry);
-                continue;
-            }
-
-            // Exponential backoff with jitter, capped.
-            var backoff = options.BackoffBase * Math.Pow(2, entry.Attempts - 1);
+            var backoff = options.BackoffBase * Math.Pow(2, Math.Min(entry.Attempts - 1, 20));
             if (backoff > options.BackoffCap)
             {
                 backoff = options.BackoffCap;

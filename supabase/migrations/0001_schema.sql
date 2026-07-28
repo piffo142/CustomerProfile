@@ -31,7 +31,11 @@ create sequence sync_seq_gen;
 create or replace function bump_sync() returns trigger
 language plpgsql as $$
 begin
-  new.updated_at := now();
+  -- Deliberately do NOT overwrite a client-supplied updated_at: LWW compares
+  -- the device's edit time, and stamping arrival time here would let a late
+  -- push from a stale device beat a genuinely newer edit. Server-side writes
+  -- that omit it still get a value.
+  new.updated_at := coalesce(new.updated_at, now());
   new.sync_seq  := nextval('sync_seq_gen');
   return new;
 end $$;

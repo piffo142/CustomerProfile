@@ -1,8 +1,9 @@
 namespace SIG.ClientCard.Data.Entities;
 
 /// <summary>
-/// Ops the server rejected (validation, not transport) or that exhausted their
-/// retries. Never retried automatically; surfaced as a badge in the UI.
+/// Ops the server rejected (validation, not transport). Transport failures
+/// retry forever with capped backoff and never land here. Never retried
+/// automatically; surfaced as a badge in the UI.
 /// </summary>
 public class SyncDeadLetterEntry
 {

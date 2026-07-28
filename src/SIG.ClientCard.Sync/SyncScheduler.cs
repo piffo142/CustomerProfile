@@ -13,8 +13,15 @@ public sealed class SyncScheduler(SyncEngine engine) : IAsyncDisposable
 
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly CancellationTokenSource _disposal = new();
+    private readonly object _debounceLock = new();
     private CancellationTokenSource? _debounceCts;
     private Task? _pollLoop;
+
+    /// <summary>
+    /// Optional predicate consulted before each run (e.g. signed-in + online).
+    /// When it returns false the trigger is skipped silently.
+    /// </summary>
+    public Func<bool>? CanSync { get; set; }
 
     public event EventHandler? SyncCompleted;
     public event EventHandler<Exception>? SyncFaulted;
@@ -41,9 +48,13 @@ public sealed class SyncScheduler(SyncEngine engine) : IAsyncDisposable
     /// <summary>Debounced trigger; bursts of writes collapse into one sync.</summary>
     public void RequestSync()
     {
-        _debounceCts?.Cancel();
         var cts = CancellationTokenSource.CreateLinkedTokenSource(_disposal.Token);
-        _debounceCts = cts;
+        lock (_debounceLock)
+        {
+            _debounceCts?.Cancel();
+            _debounceCts?.Dispose();
+            _debounceCts = cts;
+        }
 
         _ = Task.Run(async () =>
         {
@@ -56,6 +67,19 @@ public sealed class SyncScheduler(SyncEngine engine) : IAsyncDisposable
             {
                 // superseded by a newer request or disposal
             }
+            finally
+            {
+                // Whoever still owns the slot cleans it up; a superseded cts
+                // was already disposed by the next RequestSync.
+                lock (_debounceLock)
+                {
+                    if (ReferenceEquals(_debounceCts, cts))
+                    {
+                        _debounceCts = null;
+                        cts.Dispose();
+                    }
+                }
+            }
         });
     }
 
@@ -64,6 +88,11 @@ public sealed class SyncScheduler(SyncEngine engine) : IAsyncDisposable
 
     private async Task RunOnceAsync(CancellationToken ct)
     {
+        if (CanSync is { } gate && !gate())
+        {
+            return; // signed out or offline; the next trigger tries again
+        }
+
         if (!await _gate.WaitAsync(0, ct))
         {
             return; // a sync is already in flight
@@ -100,6 +129,12 @@ public sealed class SyncScheduler(SyncEngine engine) : IAsyncDisposable
             catch (OperationCanceledException)
             {
             }
+        }
+
+        lock (_debounceLock)
+        {
+            _debounceCts?.Dispose();
+            _debounceCts = null;
         }
 
         _disposal.Dispose();

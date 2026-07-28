@@ -21,7 +21,9 @@ public static class PhoneNumber
         var hasPlus = trimmed.StartsWith('+');
         var digits = new string(trimmed.Where(char.IsAsciiDigit).ToArray());
 
-        if (digits.Length == 0)
+        // Too short to be a subscriber number ("0", "999", extensions): keep
+        // the input as typed rather than inventing a bogus E.164 value.
+        if (digits.Length < 7)
         {
             return trimmed;
         }

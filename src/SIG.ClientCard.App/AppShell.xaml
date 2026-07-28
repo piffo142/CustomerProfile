@@ -13,14 +13,29 @@
         <ShellContent ContentTemplate="{DataTemplate views:ClientsPage}" Route="clients" />
     </FlyoutItem>
 
+    <ShellContent Route="login"
+                  ContentTemplate="{DataTemplate views:LoginPage}"
+                  FlyoutItemIsVisible="False" />
+
     <!-- Pending-op count and last-sync time. Users tolerate delay; they do not
          tolerate uncertainty. -->
     <Shell.FlyoutFooter>
-        <VerticalStackLayout Padding="20,12" Spacing="2" BackgroundColor="{StaticResource Cream}">
+        <VerticalStackLayout Padding="20,12" Spacing="4" BackgroundColor="{StaticResource Cream}">
+            <Label Text="{Binding AccountLine}" FontSize="12" TextColor="{StaticResource SageDark}"
+                   IsVisible="{Binding AccountLine, Converter={StaticResource IsNotEmpty}}" />
             <Label Text="{Binding StatusLine}" FontSize="13" TextColor="{StaticResource Ink}" />
             <Label Text="{Binding DetailLine}" FontSize="11" TextColor="{StaticResource InkMuted}" />
             <Label Text="{Binding DeadLetterLine}" FontSize="11" TextColor="{StaticResource Danger}"
                    IsVisible="{Binding HasDeadLetters}" />
+            <Button Text="Sign out"
+                    Style="{StaticResource SecondaryButton}"
+                    Command="{Binding SignOutCommand}"
+                    IsVisible="{Binding IsSignedIn}"
+                    Margin="0,6,0,0" />
+            <Button Text="Sign in"
+                    Command="{Binding GoToSignInCommand}"
+                    IsVisible="{Binding ShowSignIn}"
+                    Margin="0,6,0,0" />
         </VerticalStackLayout>
     </Shell.FlyoutFooter>
 </Shell>

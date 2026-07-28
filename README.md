@@ -94,16 +94,17 @@ dotnet ef migrations add <Name>
 dotnet ef dbcontext optimize --output-dir CompiledModels --namespace SIG.ClientCard.Data.CompiledModels
 ```
 
-## Enabling sync (Phase 1–2)
+## Enabling auth + sync (Phase 1–2)
 
-1. Create a Supabase project in **eu-west-2 (London)**.
-2. Apply `supabase/migrations/*.sql` in order (SQL editor or `supabase db push`).
-3. Fill in `Url` and `AnonKey` in `src/SIG.ClientCard.App/Services/SupabaseConfig.cs`.
-4. Seed a `salon` row and `salon_member` rows for your users (RLS derives all
-   access from `salon_member`).
+Phase 1 (GoTrue email/password auth, tenancy from `salon_member`, RLS) and the
+sync engine are implemented. Follow **[docs/SUPABASE_SETUP.md](docs/SUPABASE_SETUP.md)**
+to create the project, apply `supabase/migrations/*.sql`, seed the salon and
+users, and fill in `src/SIG.ClientCard.App/Services/SupabaseConfig.cs`.
 
-Until then the app runs local-only and the outbox simply accumulates; the sync
-status in the flyout footer shows "Local only".
+Until configured, the app runs local-only and the outbox simply accumulates;
+the sync status in the flyout footer shows "Local only". On first sign-in the
+app automatically re-stamps Phase 0 local data with the real salon id before
+its first push.
 
 Before committing to the hand-rolled engine long-term, the plan recommends a
 two-day PowerSync.MAUI spike at Phase 2 — the schema and Phase 0/1 code are

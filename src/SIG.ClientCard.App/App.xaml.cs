@@ -33,6 +33,28 @@ public partial class App : Application
     protected override Window CreateWindow(IActivationState? activationState)
         => new(_services.GetRequiredService<AppShell>());
 
+    protected override async void OnStart()
+    {
+        base.OnStart();
+        if (!SupabaseConfig.IsConfigured)
+        {
+            return;
+        }
+
+        // Silent restore: refresh token from SecureStorage → session in memory.
+        // Failure (first run, signed out, revoked, or restored device) shows the
+        // login page; "Work offline" remains available there.
+        var auth = _services.GetRequiredService<AuthService>();
+        if (await auth.TryRestoreAsync())
+        {
+            _ = _scheduler.SyncNowAsync();
+        }
+        else
+        {
+            await Shell.Current.GoToAsync("//login");
+        }
+    }
+
     protected override void OnResume()
     {
         base.OnResume();

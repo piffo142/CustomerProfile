@@ -26,9 +26,11 @@ public static class MauiProgram
         // ------------------------------------------------------------ core services
         services.AddSingleton<IClock, SystemClock>();
         services.AddSingleton<IDeviceIdentity, DeviceIdentity>();
-        services.AddSingleton<ITenantContext, LocalTenantContext>();
+        services.AddSingleton<TenantContext>();
+        services.AddSingleton<ITenantContext>(sp => sp.GetRequiredService<TenantContext>());
         services.AddSingleton<DatabaseKeyProvider>();
         services.AddSingleton<OutboxWriter>();
+        services.AddSingleton<TenantMigrator>();
         services.AddSingleton<IMessenger>(WeakReferenceMessenger.Default);
 
         // ------------------------------------------------------------ database
@@ -52,11 +54,15 @@ public static class MauiProgram
         services.AddSingleton<IServiceRecordRepository, ServiceRecordRepository>();
         services.AddSingleton<IClientConsentRepository, ClientConsentRepository>();
 
-        // ------------------------------------------------------------ sync
+        // ------------------------------------------------------------ auth + sync
         services.AddSingleton(new SyncOptions());
         if (SupabaseConfig.IsConfigured)
         {
-            services.AddSingleton<IAccessTokenProvider, SupabaseTokenProvider>();
+            services.AddSingleton(_ => new SupabaseAuthClient(
+                new HttpClient { BaseAddress = new Uri(SupabaseConfig.Url) },
+                SupabaseConfig.AnonKey));
+            services.AddSingleton<AuthService>();
+            services.AddSingleton<IAccessTokenProvider>(sp => sp.GetRequiredService<AuthService>());
             services.AddSingleton<ISyncTransport>(sp =>
             {
                 var handler = new SupabaseAuthHandler(
@@ -67,6 +73,9 @@ public static class MauiProgram
                 var http = new HttpClient(handler) { BaseAddress = new Uri(SupabaseConfig.Url) };
                 return new SupabaseSyncTransport(http);
             });
+
+            services.AddTransient<LoginViewModel>();
+            services.AddTransient<Views.LoginPage>();
         }
         else
         {
@@ -76,7 +85,19 @@ public static class MauiProgram
         }
 
         services.AddSingleton<SyncEngine>();
-        services.AddSingleton<SyncScheduler>();
+        services.AddSingleton(sp =>
+        {
+            var scheduler = new SyncScheduler(sp.GetRequiredService<SyncEngine>());
+            if (SupabaseConfig.IsConfigured)
+            {
+                // Sync only runs signed-in and online; skipped triggers retry later.
+                var auth = sp.GetRequiredService<AuthService>();
+                scheduler.CanSync = () => auth.IsSignedIn
+                    && Connectivity.NetworkAccess == NetworkAccess.Internet;
+            }
+
+            return scheduler;
+        });
 
         // ------------------------------------------------------------ views + viewmodels
         services.AddSingleton<ClientsViewModel>();
