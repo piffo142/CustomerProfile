@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:SIG.ClientCard.App.ViewModels"
+             xmlns:views="clr-namespace:SIG.ClientCard.App.Views"
+             x:Class="SIG.ClientCard.App.Views.ConsentsPage"
+             x:DataType="vm:ConsentsViewModel"
+             Title="Consents">
+
+    <ScrollView>
+        <VerticalStackLayout Padding="14" Spacing="10">
+
+            <Label Text="Consent is recorded per purpose and can be withdrawn at any time. Withdrawal always wins over any other change."
+                   FontSize="13"
+                   TextColor="{StaticResource InkMuted}" />
+
+            <VerticalStackLayout Spacing="8" BindableLayout.ItemsSource="{Binding Rows}">
+                <BindableLayout.ItemTemplate>
+                    <DataTemplate x:DataType="vm:ConsentRow">
+                        <Border Style="{StaticResource Card}">
+                            <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto">
+                                <Label Text="{Binding Label}" FontSize="15" FontAttributes="Bold" />
+                                <Label Grid.Row="1" Text="{Binding StatusText}"
+                                       FontSize="12" TextColor="{StaticResource InkMuted}" />
+                                <Button Grid.Column="1" Grid.RowSpan="2"
+                                        Text="Grant"
+                                        IsVisible="{Binding IsActive, Converter={StaticResource Invert}}"
+                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:ConsentsViewModel}}, Path=BeginGrantCommand}"
+                                        CommandParameter="{Binding .}" />
+                                <Button Grid.Column="1" Grid.RowSpan="2"
+                                        Text="Withdraw"
+                                        Style="{StaticResource DangerButton}"
+                                        IsVisible="{Binding IsActive}"
+                                        Command="{Binding Source={RelativeSource AncestorType={x:Type vm:ConsentsViewModel}}, Path=WithdrawCommand}"
+                                        CommandParameter="{Binding .}" />
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </BindableLayout.ItemTemplate>
+            </VerticalStackLayout>
+
+            <!-- Signature capture, shown while granting -->
+            <VerticalStackLayout Spacing="8"
+                                 IsVisible="{Binding Granting, Converter={StaticResource IsNotNull}}">
+                <Label Text="{Binding Granting.Label, StringFormat='Client signature — {0}'}"
+                       FontAttributes="Bold" />
+                <Border Stroke="{StaticResource SageLight}" StrokeThickness="1"
+                        StrokeShape="RoundRectangle 10" Padding="0">
+                    <views:SignaturePadView x:Name="Pad" HeightRequest="180" />
+                </Border>
+                <Grid ColumnDefinitions="*,*,*" ColumnSpacing="8">
+                    <Button Text="Save consent" Clicked="OnSaveConsentClicked" />
+                    <Button Grid.Column="1" Text="Clear" Style="{StaticResource SecondaryButton}" Clicked="OnClearClicked" />
+                    <Button Grid.Column="2" Text="Cancel" Style="{StaticResource SecondaryButton}" Command="{Binding CancelGrantCommand}" />
+                </Grid>
+            </VerticalStackLayout>
+
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

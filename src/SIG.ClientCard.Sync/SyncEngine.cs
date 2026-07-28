@@ -1,0 +1,534 @@
+using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
+using SIG.ClientCard.Core.Abstractions;
+using SIG.ClientCard.Core.Entities;
+using SIG.ClientCard.Core.SyncContracts;
+using SIG.ClientCard.Data;
+using SIG.ClientCard.Data.Entities;
+
+namespace SIG.ClientCard.Sync;
+
+/// <summary>
+/// Offline-first reconciliation. Local SQLite is the source of truth for the
+/// UI; this engine is a background process. No screen ever awaits it.
+/// </summary>
+public sealed class SyncEngine(
+    IDbContextFactory<ClientCardContext> dbFactory,
+    ISyncTransport transport,
+    IClock clock,
+    SyncOptions options)
+{
+    private static readonly Random Jitter = new();
+
+    /// <summary>
+    /// Push everything eligible, pull to convergence, then — at most once per
+    /// reconcile interval — assert local and server agree via checksums.
+    /// </summary>
+    public async Task SyncNowAsync(CancellationToken ct = default)
+    {
+        await PushPendingAsync(ct);
+        await PullToConvergenceAsync(ct);
+
+        if (await IsReconcileDueAsync(ct))
+        {
+            try
+            {
+                await ReconcileAsync(ct);
+            }
+            catch (SyncTransportException)
+            {
+                // Reconciliation is an integrity assertion, not a delivery
+                // mechanism — a flaky network just means it runs next time.
+            }
+        }
+    }
+
+    // ---------------------------------------------------------------- push
+
+    public async Task PushPendingAsync(CancellationToken ct = default)
+    {
+        while (!ct.IsCancellationRequested)
+        {
+            await using var db = await dbFactory.CreateDbContextAsync(ct);
+            var now = clock.UtcNow;
+
+            // Static push order: client before service_record before client_note,
+            // or FK constraints reject the batch. The ternary chain translates
+            // to a SQL CASE so only one batch is ever materialised, however
+            // large the backlog after a long offline stretch.
+            var batch = await db.Outbox
+                .Where(o => o.NextAttemptAt == null || o.NextAttemptAt <= now)
+                .OrderBy(o => o.Entity == SyncEntities.Client ? 0
+                    : o.Entity == SyncEntities.ServiceCatalog ? 1
+                    : o.Entity == SyncEntities.ServiceRecord ? 2
+                    : o.Entity == SyncEntities.ClientNote ? 3
+                    : o.Entity == SyncEntities.ClientConsent ? 4
+                    : 5)
+                .ThenBy(o => o.CreatedAt)
+                .Take(options.PushBatchSize)
+                .ToListAsync(ct);
+
+            if (batch.Count == 0)
+            {
+                return;
+            }
+
+            var ops = batch
+                .Select(o => new SyncOp(o.OpId, o.Entity, o.EntityId, o.Operation, o.Payload, o.CreatedAt))
+                .ToList();
+
+            SyncPushResult result;
+            try
+            {
+                result = await transport.PushAsync(ops, ct);
+            }
+            catch (SyncTransportException ex)
+            {
+                await RecordFailureAsync(db, batch, ex.Message, ct);
+                return; // network is down or flaky; the next trigger retries
+            }
+
+            var rejected = result.RejectedOpIds.ToHashSet();
+            foreach (var entry in batch)
+            {
+                if (rejected.Contains(entry.OpId))
+                {
+                    // Validation rejection: never retry a 4xx. Park and surface.
+                    db.DeadLetters.Add(new SyncDeadLetterEntry
+                    {
+                        OpId = entry.OpId,
+                        Entity = entry.Entity,
+                        EntityId = entry.EntityId,
+                        Operation = entry.Operation,
+                        Payload = entry.Payload,
+                        CreatedAt = entry.CreatedAt,
+                        Attempts = entry.Attempts + 1,
+                        LastError = "rejected by server",
+                        ParkedAt = clock.UtcNow,
+                    });
+                }
+
+                db.Outbox.Remove(entry);
+            }
+
+            var state = await GetStateAsync(db, ct);
+            state.LastPushAt = clock.UtcNow;
+            await db.SaveChangesAsync(ct);
+
+            if (batch.Count < options.PushBatchSize)
+            {
+                return;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Transport failure: the op never reached the server, so it must NOT be
+    /// parked — a device offline for a week would otherwise dead-letter every
+    /// queued change. Retry forever with capped exponential backoff; only
+    /// validation rejections (the server saw it and said no) park.
+    /// </summary>
+    private async Task RecordFailureAsync(
+        ClientCardContext db, List<SyncOutboxEntry> batch, string error, CancellationToken ct)
+    {
+        foreach (var entry in batch)
+        {
+            entry.Attempts++;
+            entry.LastError = error;
+
+            var backoff = options.BackoffBase * Math.Pow(2, Math.Min(entry.Attempts - 1, 20));
+            if (backoff > options.BackoffCap)
+            {
+                backoff = options.BackoffCap;
+            }
+
+            var jitter = TimeSpan.FromMilliseconds(Jitter.Next(0, 1000));
+            entry.NextAttemptAt = clock.UtcNow + backoff + jitter;
+        }
+
+        await db.SaveChangesAsync(ct);
+    }
+
+    // ---------------------------------------------------------------- pull
+
+    public async Task PullToConvergenceAsync(CancellationToken ct = default)
+    {
+        while (!ct.IsCancellationRequested)
+        {
+            var shortPage = await PullOnceAsync(ct);
+            if (shortPage)
+            {
+                return;
+            }
+        }
+    }
+
+    /// <summary>Pulls one page. Returns true when the page came back short (converged).</summary>
+    public async Task<bool> PullOnceAsync(CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var state = await GetStateAsync(db, ct);
+
+        // Overlap window: re-deliver a slice below the cursor to cover
+        // statement-time sequence allocation. Idempotent applies make it harmless.
+        var from = Math.Max(0, state.Cursor - options.OverlapWindow);
+
+        var bundle = await transport.PullAsync(from, options.PullLimit, ct);
+
+        // Whole bundle + cursor advance in one SQLite transaction: cursor commit
+        // and data apply must be atomic or a crash mid-apply loses data silently.
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+
+        foreach (var payload in bundle.Clients)
+        {
+            await ApplyClientAsync(db, payload, ct);
+        }
+
+        foreach (var payload in bundle.Catalog)
+        {
+            await ApplyCatalogAsync(db, payload, ct);
+        }
+
+        foreach (var payload in bundle.Services)
+        {
+            await ApplyServiceAsync(db, payload, ct);
+        }
+
+        foreach (var payload in bundle.Notes)
+        {
+            await ApplyNoteAsync(db, payload, ct);
+        }
+
+        foreach (var payload in bundle.Consents)
+        {
+            await ApplyConsentAsync(db, payload, ct);
+        }
+
+        foreach (var redaction in bundle.Redactions)
+        {
+            await ApplyRedactionAsync(db, redaction, ct);
+        }
+
+        var newCursor = ComputeNewCursor(state.Cursor, bundle, options.PullLimit, out var converged);
+        state.Cursor = newCursor;
+        state.LastPullAt = clock.UtcNow;
+
+        await db.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
+
+        return converged;
+    }
+
+    /// <summary>
+    /// Advance to the minimum max-seq across FULL arrays — a full array is
+    /// bounded by the page limit, so rows above its max in other arrays would be
+    /// skipped if we advanced to the overall max. When every array is short the
+    /// page is complete and the overall max is safe.
+    /// </summary>
+    internal static long ComputeNewCursor(long current, SyncPullBundle bundle, int limit, out bool converged)
+    {
+        var arrays = new (int Count, long MaxSeq)[]
+        {
+            (bundle.Clients.Count, bundle.Clients.Count == 0 ? 0 : bundle.Clients.Max(x => x.SyncSeq)),
+            (bundle.Catalog.Count, bundle.Catalog.Count == 0 ? 0 : bundle.Catalog.Max(x => x.SyncSeq)),
+            (bundle.Services.Count, bundle.Services.Count == 0 ? 0 : bundle.Services.Max(x => x.SyncSeq)),
+            (bundle.Notes.Count, bundle.Notes.Count == 0 ? 0 : bundle.Notes.Max(x => x.SyncSeq)),
+            (bundle.Consents.Count, bundle.Consents.Count == 0 ? 0 : bundle.Consents.Max(x => x.SyncSeq)),
+            (bundle.Redactions.Count, bundle.Redactions.Count == 0 ? 0 : bundle.Redactions.Max(x => x.SyncSeq)),
+        };
+
+        var fullArrays = arrays.Where(a => a.Count >= limit).ToList();
+        converged = fullArrays.Count == 0;
+
+        var candidate = converged
+            ? arrays.Where(a => a.Count > 0).Select(a => a.MaxSeq).DefaultIfEmpty(current).Max()
+            : fullArrays.Min(a => a.MaxSeq);
+
+        return Math.Max(current, candidate);
+    }
+
+    // ------------------------------------------------- per-entity conflict policy
+
+    /// <summary>
+    /// Deterministic LWW: newer updated_at wins; on an exact tie the higher
+    /// device id wins, compared as canonical uuid text to match Postgres uuid
+    /// ordering. Without the tiebreak two devices can settle on different
+    /// winners and oscillate.
+    /// </summary>
+    internal static bool IncomingWins(
+        DateTimeOffset incomingUpdatedAt, Guid incomingDevice,
+        DateTimeOffset localUpdatedAt, Guid localDevice)
+    {
+        if (incomingUpdatedAt != localUpdatedAt)
+        {
+            return incomingUpdatedAt > localUpdatedAt;
+        }
+
+        return string.CompareOrdinal(incomingDevice.ToString("D"), localDevice.ToString("D")) > 0;
+    }
+
+    private async Task ApplyClientAsync(ClientCardContext db, ClientPayload payload, CancellationToken ct)
+    {
+        var local = await db.Clients.FirstOrDefaultAsync(c => c.Id == payload.Id, ct);
+        if (local is null)
+        {
+            db.Clients.Add(payload.ToEntity());
+            return;
+        }
+
+        if (!IncomingWins(payload.UpdatedAt, payload.UpdatedByDevice, local.UpdatedAt, local.UpdatedByDevice))
+        {
+            return;
+        }
+
+        db.Entry(local).CurrentValues.SetValues(payload.ToEntity());
+    }
+
+    private async Task ApplyCatalogAsync(ClientCardContext db, ServiceCatalogPayload payload, CancellationToken ct)
+    {
+        var local = await db.ServiceCatalogItems.FirstOrDefaultAsync(i => i.Id == payload.Id, ct);
+        if (local is null)
+        {
+            db.ServiceCatalogItems.Add(payload.ToEntity());
+            return;
+        }
+
+        if (IncomingWins(payload.UpdatedAt, payload.UpdatedByDevice, local.UpdatedAt, local.UpdatedByDevice))
+        {
+            db.Entry(local).CurrentValues.SetValues(payload.ToEntity());
+        }
+    }
+
+    private async Task ApplyServiceAsync(ClientCardContext db, ServiceRecordPayload payload, CancellationToken ct)
+    {
+        var local = await db.ServiceRecords.FirstOrDefaultAsync(s => s.Id == payload.Id, ct);
+        if (local is null)
+        {
+            if (await ParentExistsAsync(db, payload.ClientId, ct))
+            {
+                db.ServiceRecords.Add(payload.ToEntity());
+            }
+
+            return;
+        }
+
+        // Delete-wins over update: a voided treatment must not resurrect.
+        if (payload.DeletedAt is not null)
+        {
+            db.Entry(local).CurrentValues.SetValues(payload.ToEntity());
+            return;
+        }
+
+        if (local.DeletedAt is not null)
+        {
+            return;
+        }
+
+        if (IncomingWins(payload.UpdatedAt, payload.UpdatedByDevice, local.UpdatedAt, local.UpdatedByDevice))
+        {
+            db.Entry(local).CurrentValues.SetValues(payload.ToEntity());
+        }
+    }
+
+    private async Task ApplyNoteAsync(ClientCardContext db, ClientNotePayload payload, CancellationToken ct)
+    {
+        // Append-only union: no conflict possible by construction. Existing
+        // notes are never overwritten.
+        var exists = await db.ClientNotes.AnyAsync(n => n.Id == payload.Id, ct);
+        if (!exists && await ParentExistsAsync(db, payload.ClientId, ct))
+        {
+            db.ClientNotes.Add(payload.ToEntity());
+        }
+    }
+
+    private async Task ApplyConsentAsync(ClientCardContext db, ClientConsentPayload payload, CancellationToken ct)
+    {
+        var local = await db.ClientConsents.FirstOrDefaultAsync(c => c.Id == payload.Id, ct);
+        if (local is null)
+        {
+            if (await ParentExistsAsync(db, payload.ClientId, ct))
+            {
+                db.ClientConsents.Add(payload.ToEntity());
+            }
+
+            return;
+        }
+
+        // Withdrawal always wins — legal requirement, never LWW. Preserve the
+        // earliest withdrawal regardless of which side wins the field merge.
+        var earliestWithdrawal = (local.WithdrawnAt, payload.WithdrawnAt) switch
+        {
+            (null, var incoming) => incoming,
+            (var mine, null) => mine,
+            (var mine, var incoming) => mine < incoming ? mine : incoming,
+        };
+
+        if (IncomingWins(payload.UpdatedAt, payload.UpdatedByDevice, local.UpdatedAt, local.UpdatedByDevice))
+        {
+            db.Entry(local).CurrentValues.SetValues(payload.ToEntity());
+        }
+
+        local.WithdrawnAt = earliestWithdrawal;
+    }
+
+    private static async Task ApplyRedactionAsync(ClientCardContext db, RedactionPayload redaction, CancellationToken ct)
+    {
+        switch (redaction.Entity)
+        {
+            case SyncEntities.Client:
+                var client = await db.Clients
+                    .Include(c => c.Notes).Include(c => c.Services).Include(c => c.Consents)
+                    .FirstOrDefaultAsync(c => c.Id == redaction.EntityId, ct);
+                if (client is not null)
+                {
+                    db.Clients.Remove(client);
+                }
+
+                break;
+
+            case SyncEntities.ServiceRecord:
+                await db.ServiceRecords
+                    .Where(s => s.Id == redaction.EntityId).ExecuteDeleteAsync(ct);
+                break;
+
+            case SyncEntities.ClientNote:
+                await db.ClientNotes
+                    .Where(n => n.Id == redaction.EntityId).ExecuteDeleteAsync(ct);
+                break;
+        }
+    }
+
+    private static Task<bool> ParentExistsAsync(ClientCardContext db, Guid clientId, CancellationToken ct)
+        => db.Clients.AnyAsync(c => c.Id == clientId, ct);
+
+    // ---------------------------------------------------------------- reconcile
+
+    private async Task<bool> IsReconcileDueAsync(CancellationToken ct)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var state = await db.SyncState.AsNoTracking().FirstOrDefaultAsync(ct);
+        return state?.LastReconcileAt is null
+            || state.LastReconcileAt <= clock.UtcNow - options.ReconcileInterval;
+    }
+
+    /// <summary>
+    /// Full-hash reconciliation: compares per-entity row counts and id hashes
+    /// with the server. A mismatch means the cursor lost rows despite the
+    /// overlap window — the cursor is reset and everything re-pulled, which the
+    /// idempotent appliers make safe. Returns true when local and server agree.
+    /// </summary>
+    public async Task<bool> ReconcileAsync(CancellationToken ct = default)
+    {
+        var server = await transport.GetChecksumAsync(ct);
+
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var match =
+            Matches(server.Clients, await db.Clients.Select(x => x.Id).ToListAsync(ct)) &&
+            Matches(server.Catalog, await db.ServiceCatalogItems.Select(x => x.Id).ToListAsync(ct)) &&
+            Matches(server.Services, await db.ServiceRecords.Select(x => x.Id).ToListAsync(ct)) &&
+            Matches(server.Notes, await db.ClientNotes.Select(x => x.Id).ToListAsync(ct)) &&
+            Matches(server.Consents, await db.ClientConsents.Select(x => x.Id).ToListAsync(ct));
+
+        var state = await GetStateAsync(db, ct);
+        state.LastReconcileAt = clock.UtcNow;
+        if (!match)
+        {
+            state.Cursor = 0;
+        }
+
+        await db.SaveChangesAsync(ct);
+
+        if (!match)
+        {
+            await PullToConvergenceAsync(ct);
+        }
+
+        return match;
+    }
+
+    private static bool Matches(EntityChecksum server, List<Guid> localIds)
+        => server.Count == localIds.Count && server.IdsHash == HashIds(localIds);
+
+    /// <summary>
+    /// Mirrors the server's md5(string_agg(id::text, ',' order by id)):
+    /// canonical lowercase ids joined by commas. Ordinal sort of the canonical
+    /// text equals Postgres uuid byte ordering (fixed-position hex + dashes),
+    /// so both sides hash the same string.
+    /// </summary>
+    internal static string HashIds(List<Guid> ids)
+    {
+        if (ids.Count == 0)
+        {
+            return "";
+        }
+
+        var joined = string.Join(",", ids.Select(g => g.ToString("D")).Order(StringComparer.Ordinal));
+        var hash = System.Security.Cryptography.MD5.HashData(System.Text.Encoding.UTF8.GetBytes(joined));
+        return Convert.ToHexStringLower(hash);
+    }
+
+    // ---------------------------------------------------------------- dead letters
+
+    public async Task<IReadOnlyList<SyncDeadLetterEntry>> GetDeadLettersAsync(CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        return await db.DeadLetters.AsNoTracking().OrderByDescending(d => d.ParkedAt).ToListAsync(ct);
+    }
+
+    /// <summary>Move a parked op back into the outbox for a fresh attempt.</summary>
+    public async Task RequeueDeadLetterAsync(Guid opId, CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var dead = await db.DeadLetters.FirstOrDefaultAsync(d => d.OpId == opId, ct);
+        if (dead is null)
+        {
+            return;
+        }
+
+        db.Outbox.Add(new SyncOutboxEntry
+        {
+            OpId = dead.OpId,
+            Entity = dead.Entity,
+            EntityId = dead.EntityId,
+            Operation = dead.Operation,
+            Payload = dead.Payload,
+            CreatedAt = dead.CreatedAt,
+            Attempts = 0,
+            NextAttemptAt = null,
+        });
+        db.DeadLetters.Remove(dead);
+        await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>Drop a parked op permanently. The local row keeps its data; it simply never syncs.</summary>
+    public async Task DiscardDeadLetterAsync(Guid opId, CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        await db.DeadLetters.Where(d => d.OpId == opId).ExecuteDeleteAsync(ct);
+    }
+
+    // ---------------------------------------------------------------- status
+
+    public async Task<SyncStatus> GetStatusAsync(CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var state = await db.SyncState.AsNoTracking().FirstOrDefaultAsync(ct);
+        return new SyncStatus(
+            PendingOps: await db.Outbox.CountAsync(ct),
+            DeadLetteredOps: await db.DeadLetters.CountAsync(ct),
+            LastPushAt: state?.LastPushAt,
+            LastPullAt: state?.LastPullAt);
+    }
+
+    private static async Task<SyncStateRow> GetStateAsync(ClientCardContext db, CancellationToken ct)
+    {
+        var state = await db.SyncState.FirstOrDefaultAsync(s => s.Id == SyncStateRow.SingletonId, ct);
+        if (state is null)
+        {
+            state = new SyncStateRow { Id = SyncStateRow.SingletonId };
+            db.SyncState.Add(state);
+        }
+
+        return state;
+    }
+}

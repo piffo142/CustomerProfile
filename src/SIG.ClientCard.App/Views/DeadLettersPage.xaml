@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:SIG.ClientCard.App.ViewModels"
+             xmlns:data="clr-namespace:SIG.ClientCard.Data.Entities;assembly=SIG.ClientCard.Data"
+             x:Class="SIG.ClientCard.App.Views.DeadLettersPage"
+             x:DataType="vm:DeadLettersViewModel"
+             Title="Sync problems">
+
+    <Grid RowDefinitions="Auto,*" Padding="14">
+
+        <Label Grid.Row="0"
+               Text="These changes were rejected by the server and will not retry on their own. The records on this device are unaffected."
+               FontSize="13"
+               TextColor="{StaticResource InkMuted}"
+               Margin="0,0,0,10" />
+
+        <CollectionView Grid.Row="1" ItemsSource="{Binding Items}" SelectionMode="None">
+            <CollectionView.EmptyView>
+                <Label Text="No sync problems — everything has been accepted by the server."
+                       Padding="16"
+                       HorizontalTextAlignment="Center"
+                       TextColor="{StaticResource InkMuted}" />
+            </CollectionView.EmptyView>
+            <CollectionView.ItemTemplate>
+                <DataTemplate x:DataType="data:SyncDeadLetterEntry">
+                    <Grid Padding="0,4">
+                        <Border Style="{StaticResource Card}">
+                            <VerticalStackLayout Spacing="6">
+                                <Label FontSize="15" FontAttributes="Bold">
+                                    <Label.Text>
+                                        <MultiBinding StringFormat="{}{0} — {1}">
+                                            <Binding Path="Entity" />
+                                            <Binding Path="Operation" />
+                                        </MultiBinding>
+                                    </Label.Text>
+                                </Label>
+                                <Label Text="{Binding ParkedAt, StringFormat='Parked {0:HH:mm, d MMM yyyy}'}"
+                                       FontSize="12"
+                                       TextColor="{StaticResource InkMuted}" />
+                                <Label Text="{Binding LastError}"
+                                       FontSize="12"
+                                       TextColor="{StaticResource Danger}"
+                                       LineBreakMode="WordWrap" />
+                                <HorizontalStackLayout Spacing="10">
+                                    <Button Text="Retry"
+                                            Command="{Binding Source={RelativeSource AncestorType={x:Type vm:DeadLettersViewModel}}, Path=RetryCommand}"
+                                            CommandParameter="{Binding .}" />
+                                    <Button Text="Discard"
+                                            Style="{StaticResource DangerButton}"
+                                            Command="{Binding Source={RelativeSource AncestorType={x:Type vm:DeadLettersViewModel}}, Path=DiscardCommand}"
+                                            CommandParameter="{Binding .}" />
+                                </HorizontalStackLayout>
+                            </VerticalStackLayout>
+                        </Border>
+                    </Grid>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
+    </Grid>
+</ContentPage>

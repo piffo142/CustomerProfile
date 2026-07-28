@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/SIG.ClientCard.App/SIG.ClientCard.App.csproj" />
+    <Project Path="src/SIG.ClientCard.Core/SIG.ClientCard.Core.csproj" />
+    <Project Path="src/SIG.ClientCard.Data/SIG.ClientCard.Data.csproj" />
+    <Project Path="src/SIG.ClientCard.Sync/SIG.ClientCard.Sync.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/SIG.ClientCard.Tests/SIG.ClientCard.Tests.csproj" />
+  </Folder>
+</Solution>

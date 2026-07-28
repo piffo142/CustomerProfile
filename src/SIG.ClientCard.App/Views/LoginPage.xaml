@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:SIG.ClientCard.App.ViewModels"
+             x:Class="SIG.ClientCard.App.Views.LoginPage"
+             x:DataType="vm:LoginViewModel"
+             Title="Sign in"
+             Shell.NavBarIsVisible="False"
+             Shell.FlyoutBehavior="Disabled">
+
+    <ScrollView>
+        <VerticalStackLayout Padding="28" Spacing="12" VerticalOptions="Center">
+
+            <Image Source="logo_beautiful_you.png"
+                   HeightRequest="140"
+                   Aspect="AspectFit"
+                   SemanticProperties.Description="Beautiful You logo" />
+            <Label Text="Beautiful You"
+                   FontSize="30"
+                   FontAttributes="Bold,Italic"
+                   TextColor="{StaticResource Peach}"
+                   HorizontalTextAlignment="Center" />
+            <Label Text="AESTHETICS AND BEAUTY"
+                   FontSize="12"
+                   CharacterSpacing="4"
+                   TextColor="{StaticResource InkMuted}"
+                   HorizontalTextAlignment="Center"
+                   Margin="0,0,0,18" />
+
+            <Entry Placeholder="Email"
+                   Text="{Binding Email}"
+                   Keyboard="Email"
+                   ReturnType="Next" />
+            <Entry Placeholder="Password"
+                   Text="{Binding Password}"
+                   IsPassword="True"
+                   ReturnType="Go"
+                   ReturnCommand="{Binding SignInCommand}" />
+
+            <Label Text="{Binding Error}"
+                   TextColor="{StaticResource Danger}"
+                   IsVisible="{Binding Error, Converter={StaticResource IsNotEmpty}}" />
+
+            <Button Text="Sign in" Command="{Binding SignInCommand}" IsEnabled="{Binding IsBusy, Converter={StaticResource Invert}}" />
+            <ActivityIndicator IsRunning="{Binding IsBusy}" Color="{StaticResource Sage}" />
+
+            <Button Text="Work offline"
+                    Style="{StaticResource SecondaryButton}"
+                    Command="{Binding WorkOfflineCommand}" />
+            <Label Text="Changes made offline are kept on this device and sync after your next sign-in."
+                   FontSize="12"
+                   TextColor="{StaticResource InkMuted}"
+                   HorizontalTextAlignment="Center" />
+
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

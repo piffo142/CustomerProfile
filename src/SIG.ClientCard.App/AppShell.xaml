@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<Shell xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+       xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+       xmlns:views="clr-namespace:SIG.ClientCard.App.Views"
+       xmlns:vm="clr-namespace:SIG.ClientCard.App.ViewModels"
+       x:Class="SIG.ClientCard.App.AppShell"
+       x:DataType="vm:SyncStatusViewModel"
+       Title="Beautiful You"
+       FlyoutBehavior="Flyout"
+       FlyoutBackgroundColor="{StaticResource Cream}">
+
+    <FlyoutItem Title="Clients" Icon="tab_clients.png">
+        <ShellContent ContentTemplate="{DataTemplate views:ClientsPage}" Route="clients" />
+    </FlyoutItem>
+
+    <FlyoutItem Title="Reports" Icon="tab_reports.png">
+        <ShellContent ContentTemplate="{DataTemplate views:ReportsPage}" Route="reports" />
+    </FlyoutItem>
+
+    <ShellContent Route="login"
+                  ContentTemplate="{DataTemplate views:LoginPage}"
+                  FlyoutItemIsVisible="False" />
+
+    <!-- Pending-op count and last-sync time. Users tolerate delay; they do not
+         tolerate uncertainty. -->
+    <Shell.FlyoutFooter>
+        <VerticalStackLayout Padding="20,12" Spacing="4" BackgroundColor="{StaticResource Cream}">
+            <Label Text="{Binding AccountLine}" FontSize="12" TextColor="{StaticResource SageDark}"
+                   IsVisible="{Binding AccountLine, Converter={StaticResource IsNotEmpty}}" />
+            <Label Text="{Binding StatusLine}" FontSize="13" TextColor="{StaticResource Ink}" />
+            <Label Text="{Binding DetailLine}" FontSize="11" TextColor="{StaticResource InkMuted}" />
+            <Label Text="{Binding DeadLetterLine}" FontSize="11" TextColor="{StaticResource Danger}"
+                   IsVisible="{Binding HasDeadLetters}">
+                <Label.GestureRecognizers>
+                    <TapGestureRecognizer Command="{Binding ReviewDeadLettersCommand}" />
+                </Label.GestureRecognizers>
+            </Label>
+            <Button Text="Sign out"
+                    Style="{StaticResource SecondaryButton}"
+                    Command="{Binding SignOutCommand}"
+                    IsVisible="{Binding IsSignedIn}"
+                    Margin="0,6,0,0" />
+            <Button Text="Sign in"
+                    Command="{Binding GoToSignInCommand}"
+                    IsVisible="{Binding ShowSignIn}"
+                    Margin="0,6,0,0" />
+        </VerticalStackLayout>
+    </Shell.FlyoutFooter>
+</Shell>

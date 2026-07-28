@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:SIG.ClientCard.App.ViewModels"
+             x:Class="SIG.ClientCard.App.Views.ClientEditPage"
+             x:DataType="vm:ClientEditViewModel"
+             Title="{Binding Title}">
+
+    <ScrollView>
+        <VerticalStackLayout Padding="16" Spacing="10">
+
+            <Label Text="Name" FontAttributes="Bold" />
+            <Entry Placeholder="Last name" Text="{Binding LastName}" />
+            <Entry Placeholder="First name" Text="{Binding FirstName}" />
+
+            <Label Text="Contact" FontAttributes="Bold" Margin="0,8,0,0" />
+            <Editor Placeholder="Address" Text="{Binding Address}" AutoSize="TextChanges" HeightRequest="80" />
+            <Entry Placeholder="Phone" Text="{Binding Phone}" Keyboard="Telephone" />
+            <Entry Placeholder="Email" Text="{Binding Email}" Keyboard="Email" />
+
+            <Label Text="How did you hear about us?" FontAttributes="Bold" Margin="0,8,0,0" />
+            <Picker ItemsSource="{Binding AcquisitionOptions}"
+                    SelectedIndex="{Binding AcquisitionIndex}"
+                    BackgroundColor="{StaticResource White}" />
+            <Entry Placeholder="Referrer name / details"
+                   Text="{Binding AcquisitionDetail}"
+                   IsVisible="{Binding AcquisitionDetailVisible}" />
+
+            <Label Text="Health" FontAttributes="Bold" Margin="0,8,0,0" />
+            <Grid ColumnDefinitions="*,Auto">
+                <Label Text="Date of birth" VerticalTextAlignment="Center" />
+                <Switch Grid.Column="1" IsToggled="{Binding HasDateOfBirth}" OnColor="{StaticResource Sage}" />
+            </Grid>
+            <DatePicker Date="{Binding DateOfBirth}"
+                        IsVisible="{Binding HasDateOfBirth}"
+                        BackgroundColor="{StaticResource White}" />
+
+            <Grid ColumnDefinitions="*,Auto">
+                <Label Text="Medical flag (see notes)" VerticalTextAlignment="Center" />
+                <Switch Grid.Column="1" IsToggled="{Binding MedicalFlag}" OnColor="{StaticResource Danger}" />
+            </Grid>
+            <Entry Placeholder="GP details" Text="{Binding GpDetails}" />
+
+            <Grid ColumnDefinitions="*,Auto">
+                <Label Text="Patch test recorded" VerticalTextAlignment="Center" />
+                <Switch Grid.Column="1" IsToggled="{Binding HasPatchTest}" OnColor="{StaticResource Sage}" />
+            </Grid>
+            <VerticalStackLayout Spacing="10" IsVisible="{Binding HasPatchTest}">
+                <DatePicker Date="{Binding PatchTestOn}" BackgroundColor="{StaticResource White}" />
+                <Picker ItemsSource="{Binding PatchTestOptions}"
+                        SelectedIndex="{Binding PatchTestIndex}"
+                        BackgroundColor="{StaticResource White}" />
+            </VerticalStackLayout>
+
+            <Label Text="Paper card" FontAttributes="Bold" Margin="0,8,0,0" />
+            <Button Text="Photograph paper card"
+                    Style="{StaticResource SecondaryButton}"
+                    Command="{Binding PhotographCardCommand}" />
+            <Label Text="✓ Card photo attached"
+                   TextColor="{StaticResource SageDark}"
+                   IsVisible="{Binding HasCardPhoto}" />
+
+            <Label Text="{Binding ValidationError}"
+                   TextColor="{StaticResource Danger}"
+                   IsVisible="{Binding ValidationError, Converter={StaticResource IsNotEmpty}}" />
+
+            <Button Text="Save" Command="{Binding SaveCommand}" Margin="0,10,0,0" />
+            <Button Text="Cancel" Style="{StaticResource SecondaryButton}" Command="{Binding CancelCommand}" />
+
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:SIG.ClientCard.App.ViewModels"
+             x:Class="SIG.ClientCard.App.Views.AddNotePage"
+             x:DataType="vm:AddNoteViewModel"
+             Title="Add note"
+             Shell.PresentationMode="ModalAnimated">
+
+    <VerticalStackLayout Padding="16" Spacing="12">
+
+        <Label Text="Notes are permanent: they cannot be edited or deleted once saved."
+               FontSize="12"
+               TextColor="{StaticResource InkMuted}" />
+
+        <Editor Placeholder="Allergies, contraindications, preferences…"
+                Text="{Binding Body}"
+                AutoSize="TextChanges"
+                HeightRequest="160" />
+
+        <Label Text="{Binding ValidationError}"
+               TextColor="{StaticResource Danger}"
+               IsVisible="{Binding ValidationError, Converter={StaticResource IsNotEmpty}}" />
+
+        <Button Text="Save" Command="{Binding SaveCommand}" />
+        <Button Text="Cancel" Style="{StaticResource SecondaryButton}" Command="{Binding CancelCommand}" />
+
+    </VerticalStackLayout>
+</ContentPage>

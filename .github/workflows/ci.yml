@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "claude/**"]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Test (libraries + sync engine)
+        run: dotnet test tests/SIG.ClientCard.Tests --nologo
+
+      # Regenerating the compiled model after every migration is a build-step
+      # obligation. This fails the build if it silently drifts.
+      - name: Verify compiled model is current
+        run: |
+          dotnet tool install -g dotnet-ef
+          cd src/SIG.ClientCard.Data
+          dotnet ef dbcontext optimize --output-dir CompiledModels --namespace SIG.ClientCard.Data.CompiledModels
+          # modelId is a random GUID stamped on every generation — ignore it,
+          # any other difference is real drift.
+          git diff --exit-code -I 'modelId: new Guid' -- CompiledModels
+
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Install MAUI Android workload
+        run: dotnet workload install maui-android
+
+      # iOS/MacCatalyst workloads don't exist on Linux, so CI builds the app
+      # with the Android TFM alone via the csproj's OverrideTargetFrameworks hook.
+      - name: Install Android SDK components
+        run: >
+          dotnet build src/SIG.ClientCard.App -f net10.0-android --nologo
+          -p:OverrideTargetFrameworks=net10.0-android
+          -t:InstallAndroidDependencies
+          -p:AndroidSdkDirectory=$ANDROID_HOME
+          -p:AcceptAndroidSDKLicenses=true
+
+      - name: Build Android app
+        run: >
+          dotnet build src/SIG.ClientCard.App -f net10.0-android --nologo
+          -p:OverrideTargetFrameworks=net10.0-android
+          -p:AndroidSdkDirectory=$ANDROID_HOME
