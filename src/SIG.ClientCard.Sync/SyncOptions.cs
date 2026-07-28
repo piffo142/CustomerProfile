@@ -1,0 +1,25 @@
+namespace SIG.ClientCard.Sync;
+
+public sealed class SyncOptions
+{
+    /// <summary>Max ops per push batch.</summary>
+    public int PushBatchSize { get; init; } = 100;
+
+    /// <summary>Row limit per entity per pull page.</summary>
+    public int PullLimit { get; init; } = 500;
+
+    /// <summary>
+    /// Sequence values are allocated at statement time, not commit time, so a
+    /// long transaction can commit below an already-consumed cursor. Pulling
+    /// from cursor - overlap re-delivers that window; idempotent upserts make
+    /// the re-delivery harmless.
+    /// </summary>
+    public long OverlapWindow { get; init; } = 1000;
+
+    /// <summary>Transport failures beyond this park the op in the dead letter.</summary>
+    public int MaxAttempts { get; init; } = 10;
+
+    public TimeSpan BackoffBase { get; init; } = TimeSpan.FromSeconds(2);
+
+    public TimeSpan BackoffCap { get; init; } = TimeSpan.FromMinutes(5);
+}

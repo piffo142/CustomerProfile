@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:SIG.ClientCard.App.ViewModels"
+             xmlns:entities="clr-namespace:SIG.ClientCard.Core.Entities;assembly=SIG.ClientCard.Core"
+             x:Class="SIG.ClientCard.App.Views.ClientsPage"
+             x:DataType="vm:ClientsViewModel"
+             Title="Clients">
+
+    <ContentPage.ToolbarItems>
+        <ToolbarItem Text="Add" Command="{Binding AddClientCommand}" />
+    </ContentPage.ToolbarItems>
+
+    <Grid RowDefinitions="Auto,Auto,*">
+
+        <!-- Brand header: Beautiful You logo at the top of the entry screen -->
+        <VerticalStackLayout Grid.Row="0" Padding="0,16,0,4" Spacing="0">
+            <Image Source="logo_beautiful_you.png"
+                   HeightRequest="120"
+                   Aspect="AspectFit"
+                   SemanticProperties.Description="Beautiful You logo" />
+            <Label Text="Beautiful You"
+                   FontSize="30"
+                   FontAttributes="Bold,Italic"
+                   TextColor="{StaticResource Peach}"
+                   HorizontalTextAlignment="Center" />
+            <Label Text="AESTHETICS AND BEAUTY"
+                   FontSize="12"
+                   CharacterSpacing="4"
+                   TextColor="{StaticResource InkMuted}"
+                   HorizontalTextAlignment="Center" />
+        </VerticalStackLayout>
+
+        <SearchBar Grid.Row="1"
+                   Margin="12,8,12,0"
+                   Placeholder="Search name, phone or email"
+                   Text="{Binding SearchTerm}" />
+
+        <CollectionView Grid.Row="2"
+                        Margin="12,8,12,0"
+                        ItemsSource="{Binding Items}"
+                        RemainingItemsThreshold="10"
+                        RemainingItemsThresholdReachedCommand="{Binding LoadMoreCommand}"
+                        ItemsUpdatingScrollMode="KeepItemsInView"
+                        SelectionMode="None">
+            <CollectionView.EmptyView>
+                <VerticalStackLayout Padding="24" Spacing="8">
+                    <Label Text="No clients yet"
+                           FontSize="18"
+                           HorizontalTextAlignment="Center"
+                           TextColor="{StaticResource InkMuted}" />
+                    <Label Text="Tap Add to create the first client card."
+                           HorizontalTextAlignment="Center"
+                           TextColor="{StaticResource InkMuted}" />
+                </VerticalStackLayout>
+            </CollectionView.EmptyView>
+            <CollectionView.ItemTemplate>
+                <DataTemplate x:DataType="entities:Client">
+                    <Grid Padding="4,4">
+                        <Border Style="{StaticResource Card}">
+                            <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto">
+                                <Label Grid.Row="0" Grid.Column="0"
+                                       Text="{Binding DisplayName}"
+                                       FontSize="17"
+                                       FontAttributes="Bold" />
+                                <Label Grid.Row="1" Grid.Column="0"
+                                       Text="{Binding Phone}"
+                                       FontSize="14"
+                                       TextColor="{StaticResource InkMuted}" />
+                                <Label Grid.Row="0" Grid.RowSpan="2" Grid.Column="1"
+                                       Text="›"
+                                       FontSize="26"
+                                       VerticalTextAlignment="Center"
+                                       TextColor="{StaticResource Sage}" />
+                            </Grid>
+                            <Border.GestureRecognizers>
+                                <TapGestureRecognizer
+                                    Command="{Binding Source={RelativeSource AncestorType={x:Type vm:ClientsViewModel}}, Path=OpenClientCommand}"
+                                    CommandParameter="{Binding .}" />
+                            </Border.GestureRecognizers>
+                        </Border>
+                    </Grid>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
+    </Grid>
+</ContentPage>

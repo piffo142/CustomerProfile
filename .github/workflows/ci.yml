@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "claude/**"]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Test (libraries + sync engine)
+        run: dotnet test tests/SIG.ClientCard.Tests --nologo
+
+      # Regenerating the compiled model after every migration is a build-step
+      # obligation. This fails the build if it silently drifts.
+      - name: Verify compiled model is current
+        run: |
+          dotnet tool install -g dotnet-ef
+          cd src/SIG.ClientCard.Data
+          dotnet ef dbcontext optimize --output-dir CompiledModels --namespace SIG.ClientCard.Data.CompiledModels
+          git diff --exit-code -- CompiledModels
+
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Install MAUI Android workload
+        run: dotnet workload install maui-android
+
+      - name: Build Android app
+        run: dotnet build src/SIG.ClientCard.App -f net10.0-android --nologo
