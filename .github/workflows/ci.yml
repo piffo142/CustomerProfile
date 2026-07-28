@@ -25,7 +25,9 @@ jobs:
           dotnet tool install -g dotnet-ef
           cd src/SIG.ClientCard.Data
           dotnet ef dbcontext optimize --output-dir CompiledModels --namespace SIG.ClientCard.Data.CompiledModels
-          git diff --exit-code -- CompiledModels
+          # modelId is a random GUID stamped on every generation — ignore it,
+          # any other difference is real drift.
+          git diff --exit-code -I 'modelId: new Guid' -- CompiledModels
 
   android:
     runs-on: ubuntu-latest
@@ -44,5 +46,18 @@ jobs:
       - name: Install MAUI Android workload
         run: dotnet workload install maui-android
 
+      # iOS/MacCatalyst workloads don't exist on Linux, so CI builds the app
+      # with the Android TFM alone via the csproj's OverrideTargetFrameworks hook.
+      - name: Install Android SDK components
+        run: >
+          dotnet build src/SIG.ClientCard.App -f net10.0-android --nologo
+          -p:OverrideTargetFrameworks=net10.0-android
+          -t:InstallAndroidDependencies
+          -p:AndroidSdkDirectory=$ANDROID_HOME
+          -p:AcceptAndroidSDKLicenses=true
+
       - name: Build Android app
-        run: dotnet build src/SIG.ClientCard.App -f net10.0-android --nologo
+        run: >
+          dotnet build src/SIG.ClientCard.App -f net10.0-android --nologo
+          -p:OverrideTargetFrameworks=net10.0-android
+          -p:AndroidSdkDirectory=$ANDROID_HOME

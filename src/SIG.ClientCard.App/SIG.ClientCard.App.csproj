@@ -3,6 +3,10 @@
   <PropertyGroup>
     <TargetFrameworks>net10.0-android;net10.0-ios;net10.0-maccatalyst</TargetFrameworks>
     <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('windows'))">$(TargetFrameworks);net10.0-windows10.0.19041.0</TargetFrameworks>
+    <!-- CI hook: restrict the TFM list without a global TargetFrameworks
+         property, which would leak into referenced projects and corrupt their
+         restore. e.g. -p:OverrideTargetFrameworks=net10.0-android -->
+    <TargetFrameworks Condition="'$(OverrideTargetFrameworks)' != ''">$(OverrideTargetFrameworks)</TargetFrameworks>
 
     <OutputType>Exe</OutputType>
     <RootNamespace>SIG.ClientCard.App</RootNamespace>
